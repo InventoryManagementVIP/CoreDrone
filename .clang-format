@@ -1,0 +1,8 @@
+# C++ style for any performance-critical nodes (none yet: the stack is Python unless it must not be).
+BasedOnStyle: Google
+ColumnLimit: 120
+IndentWidth: 2
+AccessModifierOffset: -1
+DerivePointerAlignment: false
+PointerAlignment: Left
+IncludeBlocks: Regroup

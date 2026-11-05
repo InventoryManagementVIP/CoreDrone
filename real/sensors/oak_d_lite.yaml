@@ -1,0 +1,26 @@
+# depthai_ros_driver parameters for the OAK-D Lite. UNTESTED: no camera has been connected.
+# Names come from depthai_ros_driver 2.12 on Jazzy, including its config/isaac_vslam.yaml. Topic
+# names are remapped to the canonical ones in real/launch/real_platform.launch.py.
+/oak:
+  ros__parameters:
+    camera:
+      i_pipeline_type: RGBD
+      i_enable_imu: true
+      i_enable_ir: false                     # the Lite has no IR projector
+      i_publish_tf_from_calibration: false   # extrinsics come from the URDF (inv_description)
+    stereo:
+      i_reverse_stereo_socket_order: true    # from Luxonis's Isaac VSLAM config
+      i_publish_synced_rect_pair: true       # rectified, time-synced pair for VSLAM
+    left:
+      i_resolution: '480'                    # OV7251 global shutter, sensor maximum
+      i_fps: 30.0
+    right:
+      i_resolution: '480'
+      i_fps: 30.0
+    rgb:
+      i_resolution: '1080P'                  # label reading
+      i_fps: 15.0
+      # Auto-focus units only: lock the lens so vibration cannot move it, and calibrate there.
+      # TODO(hardware): find the lens position that is sharp at the 1.0 m scan standoff.
+      # r_set_man_focus: true
+      # r_focus: 130

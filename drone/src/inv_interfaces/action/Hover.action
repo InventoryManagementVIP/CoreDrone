@@ -1,0 +1,7 @@
+# Hold the current position for duration_s seconds.
+float32 duration_s
+---
+bool success
+string message
+---
+float32 remaining_s

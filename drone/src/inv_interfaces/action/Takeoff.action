@@ -1,0 +1,8 @@
+# Switch to the autonomous mode, arm, and climb to altitude_m above the takeoff point.
+float32 altitude_m
+---
+bool success
+string message
+---
+float32 altitude_m
+string phase

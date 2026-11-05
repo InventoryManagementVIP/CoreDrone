@@ -1,0 +1,7 @@
+# AprilTag adapter. Must match DEFAULTS in inv_perception/tag_adapter.py.
+tag_adapter:
+  ros__parameters:
+    input_topic: /perception/apriltag/detections
+    family: tag36h11
+    tag_size_m: 0.09           # black-square edge; set from the layout by drone.launch.py
+    pose_wait_s: 0.1

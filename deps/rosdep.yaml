@@ -1,0 +1,26 @@
+# Project-local rosdep keys for dependencies that are not (or not correctly) in rosdistro.
+# Registered in the images by docker/dev.Dockerfile:
+#   echo "yaml file:///opt/inv/rosdep.yaml" > /etc/ros/rosdep/sources.list.d/10-coredrone.list
+# For a native install, add the same line pointing at this file, then `rosdep update`.
+
+# zxing-cpp Python bindings (barcode / QR decoding in inv_perception).
+python3-zxing-cpp:
+  ubuntu:
+    noble: [python3-zxing-cpp]
+    jammy:
+      pip:
+        packages: [zxing-cpp]
+  osx:
+    pip:
+      packages: [zxing-cpp]
+
+# pymavlink (inv_tools: EKF origin setter, parameter diff).
+# The images install it from the ArduPilot submodule instead, so its dialect matches the
+# pinned firmware; docker/dev.Dockerfile passes --skip-keys python3-pymavlink.
+python3-pymavlink:
+  ubuntu:
+    pip:
+      packages: [pymavlink]
+  osx:
+    pip:
+      packages: [pymavlink]

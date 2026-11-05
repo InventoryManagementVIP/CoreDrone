@@ -1,0 +1,19 @@
+# CoreDrone onboard stack. UNTESTED SKELETON. Installed by real/jetson/setup.sh.
+[Unit]
+Description=CoreDrone onboard stack
+After=docker.service network-online.target chrony.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/coredrone/coredrone.env
+WorkingDirectory=/opt/coredrone/real/jetson
+ExecStartPre=/usr/bin/mkdir -p /var/lib/coredrone/runs /var/lib/coredrone/bags
+ExecStart=/usr/bin/docker compose -f compose.yaml up --abort-on-container-exit
+ExecStop=/usr/bin/docker compose -f compose.yaml down
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

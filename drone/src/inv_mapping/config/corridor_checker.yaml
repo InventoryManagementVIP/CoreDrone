@@ -1,0 +1,6 @@
+# Corridor checker. Must match DEFAULTS in inv_mapping/corridor_checker.py.
+corridor_checker:
+  ros__parameters:
+    backend: none                 # set by mapping.launch.py
+    rate_hz: 5.0
+    min_clearance_m: 0.6          # nvblox backend (phase 2): BLOCKED below this ESDF distance

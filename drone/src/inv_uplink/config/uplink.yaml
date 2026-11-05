@@ -1,0 +1,12 @@
+# Uplink. Must match DEFAULTS in inv_uplink/node.py.
+uplink:
+  ros__parameters:
+    db_path: /tmp/coredrone/inventory.sqlite       # same file the inventory node writes
+    backend: mock                                  # mock | http (http is TODO(phase-2))
+    mock_output: /tmp/coredrone/mock_backend.jsonl
+    mock_failure_rate: 0.0                         # e.g. 0.3 to rehearse flaky warehouse Wi-Fi
+    sync_period_s: 2.0
+    batch_size: 50
+    export_dir: /tmp/coredrone/exports
+    export_on_shutdown: true
+    validate_records: true                         # reject records that break contracts/scan_record.schema.json

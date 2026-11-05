@@ -1,0 +1,20 @@
+# Owners per subsystem. Owners rotate every semester: update the team handles, not the paths.
+# TODO(team): create these GitHub teams in the InventoryManagementVIP org and add members.
+# Later entries win over earlier ones for the same path.
+
+*                                   @InventoryManagementVIP/drone-leads
+
+/sim/                               @InventoryManagementVIP/drone-sim
+/real/                              @InventoryManagementVIP/drone-hardware
+/real/flight_controller/params/     @InventoryManagementVIP/drone-hardware @InventoryManagementVIP/drone-flight
+/sim/params/                        @InventoryManagementVIP/drone-sim @InventoryManagementVIP/drone-flight
+
+/drone/src/inv_perception/          @InventoryManagementVIP/drone-perception
+/drone/src/inv_mission/             @InventoryManagementVIP/drone-mission
+/drone/src/inv_flight_interface/    @InventoryManagementVIP/drone-flight
+/drone/src/inv_description/         @InventoryManagementVIP/drone-perception @InventoryManagementVIP/drone-sim
+
+# The drone -> backend contract needs both the drone and the app team.
+/contracts/                         @InventoryManagementVIP/drone-leads @InventoryManagementVIP/app-team
+
+/docker/ /deps/ /.github/           @InventoryManagementVIP/drone-leads

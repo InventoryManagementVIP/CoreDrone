@@ -1,0 +1,58 @@
+# Topic profiles for `ros2 run inv_tools record --profile <name>` (MCAP).
+profiles:
+  # Health and decisions only: small enough to record on every flight.
+  minimal:
+    - /tf
+    - /tf_static
+    - /flight/state
+    - /localization/status
+    - /localization/odom
+    - /mapping/blocked
+    - /mission/status
+    - /safety/status
+    - /perception/detections
+    - /inventory/items
+    - /rosout
+  # Plus the label camera, to debug decoding.
+  scan:
+    - /tf
+    - /tf_static
+    - /flight/state
+    - /localization/status
+    - /localization/odom
+    - /mission/status
+    - /safety/status
+    - /perception/detections
+    - /inventory/items
+    - /camera/color/image_raw
+    - /camera/color/camera_info
+    - /rosout
+  # Everything VSLAM needs to be replayed offline (large: stereo at 30 Hz).
+  sensors:
+    - /tf
+    - /tf_static
+    - /camera/left/image_raw
+    - /camera/left/camera_info
+    - /camera/right/image_raw
+    - /camera/right/camera_info
+    - /camera/imu
+    - /camera/depth/image_raw
+    - /camera/depth/camera_info
+    - /camera/color/image_raw
+    - /camera/color/camera_info
+    - /localization/odom
+    - /flight/state
+  # Simulation: minimal plus ground truth, for comparing localization backends.
+  sim:
+    - /clock
+    - /tf
+    - /tf_static
+    - /sim/ground_truth/odom
+    - /flight/state
+    - /localization/status
+    - /localization/odom
+    - /mission/status
+    - /safety/status
+    - /perception/detections
+    - /inventory/items
+    - /rosout

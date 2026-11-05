@@ -1,0 +1,18 @@
+# Isaac ROS nvblox 4.6 (ROS 2 Jazzy). UNTESTED here: needs CUDA. Parameter names from the
+# release-4.6 docs; check them against the installed nvblox_ros before the first GPU run.
+nvblox_node:
+  ros__parameters:
+    num_cameras: 1
+    use_depth: true
+    use_color: false
+    use_lidar: false
+    global_frame: odom                 # build the map in odom (drift-free locally, REP-105)
+    pose_frame: base_link
+    use_tf_transforms: true
+    voxel_size: 0.05                   # m
+    esdf_mode: 3d                      # the corridor check needs heights (shelves), not a 2D slice
+    mapping_type: static_tsdf
+    integrate_depth_rate_hz: 15.0
+    update_esdf_rate_hz: 5.0
+    update_mesh_rate_hz: 2.0
+    publish_esdf_distance_slice: false

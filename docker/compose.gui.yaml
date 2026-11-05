@@ -1,0 +1,12 @@
+# GUI override for Linux and Windows (WSLg): lets Gazebo and RViz open windows on the host.
+# The justfile adds it (plus compose.wslg.yaml / compose.dri.yaml when those exist) whenever a
+# display is available. macOS stays headless: use Foxglove instead.
+services:
+  dev:
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-}
+      XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR:-/tmp}
+      QT_X11_NO_MITSHM: "1"
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw

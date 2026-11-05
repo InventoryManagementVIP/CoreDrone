@@ -1,0 +1,9 @@
+# Barcode / QR reader. Must match DEFAULTS in inv_perception/code_reader.py.
+code_reader:
+  ros__parameters:
+    image_topic: /camera/color/image_raw
+    camera_info_topic: /camera/color/camera_info
+    formats: [QRCode, DataMatrix, Code128, EAN13]   # zxing-cpp BarcodeFormat names
+    qr_symbol_size_m: 0.0      # QR symbol edge for pose estimation; 0 = unknown (set from the layout)
+    max_rate_hz: 5.0           # decode at most this many frames per second
+    try_harder: true

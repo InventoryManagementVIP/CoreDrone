@@ -1,0 +1,16 @@
+# apriltag_ros (CPU AprilTag detector), ros-${ROS_DISTRO}-apriltag-ros.
+# Isaac ROS's GPU detector only supports tag36h11, so the whole system uses tag36h11.
+apriltag:
+  ros__parameters:
+    image_transport: raw
+    family: 36h11
+    size: 0.09                 # black-square edge in metres; drone.launch.py sets it from the layout
+    max_hamming: 0             # no bit errors: we would rather miss a tag than misread a slot
+    detector:
+      threads: 2
+      decimate: 1.0            # full resolution: tags are small at 1 m
+      blur: 0.0
+      refine: true
+      sharpening: 0.25
+      debug: false
+    pose_estimation_method: pnp

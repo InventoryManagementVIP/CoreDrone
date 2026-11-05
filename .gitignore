@@ -1,0 +1,46 @@
+# colcon (normally in Docker volumes, but native builds put them here)
+drone/build/
+drone/install/
+drone/log/
+
+# Generated simulation worlds (just worldgen) and run outputs (inventory DB, CSV, reports)
+sim/worlds/generated/
+runs/
+
+# Recordings: never commit bags (docs/datasets.md says where they go)
+bags/
+*.mcap
+*.db3
+*.bag
+
+# Secrets: backend URL/keys live in the repo-root .env (see .env.example). docker/.env is
+# committed on purpose: it only holds build pins.
+/.env
+*.key
+*.pem
+secrets/
+
+# SITL working files
+eeprom.bin
+logs/
+terrain/
+mav.parm
+mav.tlog*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

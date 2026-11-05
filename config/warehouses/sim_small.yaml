@@ -1,0 +1,76 @@
+# CI warehouse: 2 aisles x 2 racks x 3 levels x 3 bays = 36 slots.
+# Schema: contracts/warehouse_layout.schema.json. Map frame: ENU, metres, z = 0 on the floor.
+#
+#   y
+#   ^      A2-L  [###########]   face y = 7.6
+#   |      aisle A2 -------->    centre y = 6.1
+#   |      A2-R  [###########]   face y = 4.6
+#   |      A1-L  [###########]   face y = 3.0   (back to back with A2-R)
+#   |  P   aisle A1 -------->    centre y = 1.5
+#   |      A1-R  [###########]   face y = 0.0
+#   +-------------------------------> x
+#   P = takeoff pad at the aisle end (0, 1.5)
+schema_version: "1.0"
+warehouse_id: sim_small
+name: "CI warehouse: 2 aisles x 2 racks x 3 levels"
+
+geodetic_origin:
+  latitude_deg: 40.4237
+  longitude_deg: -86.9212
+  altitude_m: 190.0
+
+takeoff:
+  x: 0.0
+  y: 1.5
+  yaw_deg: 0.0
+
+rack_defaults:
+  bays: 3
+  bay_width_m: 0.9
+  depth_m: 0.8
+  level_heights_m: [0.40, 1.30, 2.20]
+  height_m: 3.0
+  beam_height_m: 0.12
+
+labels:
+  location:
+    kind: apriltag
+    family: tag36h11
+    size_m: 0.09                # black square; the printed label adds a white border
+    first_id: 0
+  item:
+    kind: qr
+    size_m: 0.18                # QR symbol edge, excluding the quiet zone
+    payload_format: "{sku}"
+
+slot_code_format: "{rack}-L{level}-B{bay}"
+
+scan:
+  standoff_m: 1.0
+  camera_height_offset_m: 0.10
+  hover_s: 2.0
+  transit_altitude_m: 1.0
+  speed_mps: 0.6
+  order: serpentine
+
+aisles:
+  - id: A1
+    start: {x: 1.0, y: 1.5}
+    end: {x: 5.0, y: 1.5}
+    width_m: 3.0
+    racks:
+      - {id: A1-R, side: right, offset_m: 0.4}
+      - {id: A1-L, side: left, offset_m: 0.4}
+  - id: A2
+    start: {x: 1.0, y: 6.1}
+    end: {x: 5.0, y: 6.1}
+    width_m: 3.0
+    racks:
+      - {id: A2-R, side: right, offset_m: 0.4}
+      - {id: A2-L, side: left, offset_m: 0.4}
+
+sim:
+  seed: 42
+  fill_ratio: 0.85
+  sku_format: "SKU-{n:05d}"
+  box_size_m: [0.40, 0.40, 0.40]

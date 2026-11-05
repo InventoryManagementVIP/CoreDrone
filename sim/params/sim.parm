@@ -1,0 +1,44 @@
+# ArduPilot SITL overrides, loaded after real/flight_controller/params/common.parm.
+# Keep this file small: only what differs because it is a simulator.
+
+# ---- Gazebo iris model (ardupilot_gazebo) --------------------------------------------------------
+MOT_PWM_MIN          1100
+MOT_PWM_MAX          1900
+
+# ---- DDS over UDP to the micro-ROS agent in the same container ---------------------------------
+DDS_UDP_PORT         2019
+# DDS_DOMAIN_ID is appended at launch from $ROS_DOMAIN_ID (sim_platform.launch.py).
+
+# ---- No GPS, exactly like the real vehicle ------------------------------------------------------
+# SITL would otherwise simulate a perfect GPS and hide the external-nav path we need to test.
+SIM_GPS1_ENABLE      0
+
+# ---- Simulated rangefinder: Gazebo's downward ray sensor, forwarded by ArduPilotPlugin (rng_1) ----
+RNGFND1_TYPE         100     # SITL
+# ---- Simulated optical flow (EKF source set 2), from SITL's own model of the vehicle motion ----
+SIM_FLOW_ENABLE      1
+FLOW_TYPE            10      # SITL
+
+# ---- One IMU: Gazebo provides a single IMU, and SITL's synthesised second IMU disagrees with it
+#      while the physics settles after spawn ("Gyros/Accels inconsistent"), delaying arming by
+#      minutes. The real vehicle keeps its multi-IMU consistency checks (common.parm defaults).
+SIM_IMU_COUNT        1
+EK3_IMU_MASK         1
+# SITL's copter.parm "calibrates" a second accel (offsets 0.001, scale 1.001). An unused accel
+# with calibration fails the arming check ("3D Accel calibration needed",
+# AP_InertialSensor::accel_calibrated_ok_all), so clear it.
+INS_ACC2OFFS_X       0
+INS_ACC2OFFS_Y       0
+INS_ACC2OFFS_Z       0
+INS_ACC2SCAL_X       1
+INS_ACC2SCAL_Y       1
+INS_ACC2SCAL_Z       1
+
+# ---- SITL has no compass worth using indoors either ---------------------------------------------
+COMPASS_ENABLE       0
+
+# ---- No RC transmitter in SITL ------------------------------------------------------------------
+# Real flights require one (real/flight_test/checklist.md). In SITL the radio failsafe would stop
+# GUIDED flight, so it is disabled here only.
+FS_THR_ENABLE        0
+ARMING_SKIPCHK       0       # run every arming check (Copter-4.7 replaced ARMING_CHECK with this)

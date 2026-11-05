@@ -1,0 +1,10 @@
+# Export queued scan records to CSV.
+# Empty path: write to the uplink node's default export directory.
+string path
+# Only export records from this mission. Empty: all missions.
+string mission_id
+---
+bool success
+string path
+uint32 count
+string message

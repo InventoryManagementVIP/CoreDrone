@@ -1,0 +1,55 @@
+name: sim-smoke
+
+# Headless Gazebo + ArduPilot SITL (GPS off, external nav) + the full stack with groundtruth
+# localization: arm -> take off 1.5 m -> hover 10 s -> land, all through inv_flight_interface.
+on:
+  pull_request:
+    paths:
+      - drone/**
+      - sim/**
+      - deps/**
+      - docker/**
+      - config/**
+      - real/flight_controller/params/**
+      - justfile
+      - .github/workflows/sim-smoke.yml
+      - .github/actions/**
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sim-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sim-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150   # includes a cold image build; the test itself is capped below
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/dev-image
+        with:
+          arch: amd64
+      - run: just build
+      - name: Parameter names exist in the pinned ArduPilot
+        run: just params-check
+        timeout-minutes: 5
+      - name: SITL smoke test
+        run: just sim-smoke
+        timeout-minutes: 20
+      - name: Collect ROS and SITL logs
+        if: failure()
+        run: |
+          docker compose -f docker/compose.yaml cp dev:/home/dev/.ros/log ros-log || true
+          docker compose -f docker/compose.yaml cp dev:/tmp/coredrone sitl || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: sim-smoke-logs
+          path: |
+            ros-log
+            sitl

@@ -1,0 +1,72 @@
+# CoreDrone ArduCopter parameters shared by simulation and the real vehicle.
+# Layering: common.parm -> sim/params/sim.parm (SITL) or real/flight_controller/params/real.parm.
+# Parameter files are code: every change goes through a PR; `just params-diff` compares a live
+# FC against these files. Names verified against Copter-4.7.2 (docs/ardupilot.md).
+
+# ---- Frame -------------------------------------------------------------------------------------
+FRAME_CLASS          1       # Quad
+FRAME_TYPE           1       # X
+
+# ---- ROS 2 link: AP_DDS (Micro XRCE-DDS) -------------------------------------------------------
+DDS_ENABLE           1
+# DDS_DOMAIN_ID must equal ROS_DOMAIN_ID. Sim sets it at launch from the environment.
+
+# ---- GPS-denied navigation: EKF3 with external navigation (VSLAM) -----------------------------
+AHRS_EKF_TYPE        3
+EK3_ENABLE           1
+GPS1_TYPE            0       # no GPS indoors
+# Source set 1 (default): external navigation from inv_localization (via inv_flight_interface).
+# AP_DDS only forwards a pose (no velocity), so velocity sources are left to the EKF.
+EK3_SRC1_POSXY       6       # ExternalNav
+EK3_SRC1_VELXY       0       # None: /ap/tf carries pose only
+EK3_SRC1_POSZ        2       # RangeFinder (indoor baro is noisy: HVAC, prop wash near shelves)
+EK3_SRC1_VELZ        0       # None
+EK3_SRC1_YAW         6       # ExternalNav (compass is unusable near steel racks)
+# Source set 2 (RC-switch fallback when VSLAM is lost): optical flow + rangefinder.
+# No flow sensor on the parts list yet (real.parm disables this set). Yaw from compass is a known
+# weakness indoors and must be revisited once the flow sensor is fitted.
+EK3_SRC2_POSXY       0       # None
+EK3_SRC2_VELXY       5       # OpticalFlow
+EK3_SRC2_POSZ        2       # RangeFinder
+EK3_SRC2_VELZ        0       # None
+EK3_SRC2_YAW         1       # Compass
+EK3_SRC_OPTIONS      0       # bit 0 FuseAllVelocities left off: one velocity source per set
+COMPASS_USE          0
+COMPASS_USE2         0
+COMPASS_USE3         0
+
+# Visual odometry (the EKF's view of external navigation).
+VISO_TYPE            1       # MAVLink-style backend; AP_DDS feeds the same interface
+VISO_POS_X           0       # base_link is the FC body frame, so no camera offset here
+VISO_POS_Y           0
+VISO_POS_Z           0
+VISO_ORIENT          0
+# inv_flight_interface stamps external nav with its capture time in FC clock, so this only covers
+# residual latency. Re-measure on hardware (docs/ardupilot.md).
+VISO_DELAY_MS        10
+VISO_POS_M_NSE       0.1
+VISO_YAW_M_NSE       0.1
+
+# Leave BRD_RTC_TYPES at its default (1 = GPS only). If the RTC is set from MAVLink SYSTEM_TIME,
+# /ap/time becomes UTC and external-nav timestamps can no longer be mapped to the FC clock.
+BRD_RTC_TYPES        1
+
+# ---- Rangefinder (EKF height) ------------------------------------------------------------------
+RNGFND1_ORIENT       25      # down
+RNGFND1_MIN          0.10    # m
+RNGFND1_MAX          8.00    # m
+
+# ---- Flight limits for an indoor warehouse -----------------------------------------------------
+GUID_TIMEOUT         3       # s; GUIDED stops if velocity setpoints stop (second line of defence)
+# Copter 4.7 renamed these to SI units and moved WPNAV_* to WP_* (WPNAV_SPEED [cm/s] -> WP_SPD [m/s]).
+WP_SPD               1.0     # m/s
+WP_SPD_UP            0.5     # m/s
+WP_SPD_DN            0.4     # m/s
+LAND_SPD_MS          0.3     # m/s final descent
+PILOT_SPD_UP         1.0     # m/s
+FENCE_ENABLE         0       # the stack enforces a box geofence; the FC fence needs a GPS-free setup first
+RTL_ALT_M            1.5     # m; RTL is not used indoors, keep it low anyway
+
+# ---- Failsafes ---------------------------------------------------------------------------------
+FS_EKF_ACTION        1       # land if the EKF loses its position estimate (e.g. VSLAM lost)
+FS_EKF_THRESH        0.8

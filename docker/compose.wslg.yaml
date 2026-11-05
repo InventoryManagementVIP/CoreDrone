@@ -1,0 +1,7 @@
+# Windows 11 WSLg: X11/Wayland/PulseAudio sockets for GUI apps (added by the justfile inside WSL2).
+services:
+  dev:
+    environment:
+      PULSE_SERVER: ${PULSE_SERVER:-}
+    volumes:
+      - /mnt/wslg:/mnt/wslg

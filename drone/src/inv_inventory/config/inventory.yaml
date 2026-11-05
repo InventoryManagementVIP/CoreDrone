@@ -1,0 +1,12 @@
+# Inventory node. Must match DEFAULTS in inv_inventory/node.py.
+inventory:
+  ros__parameters:
+    warehouse: sim_small                       # config/warehouses/<name>.yaml
+    mission_id: ""                             # empty: take it from /mission/status
+    drone_id: coredrone-1
+    db_path: /tmp/coredrone/inventory.sqlite   # drone.launch.py points this into the run directory
+    map_frame: map
+    group_delay_s: 0.3                         # wait for all detectors to report on an image
+    label_window_s: 1.0                        # location labels this recent still count ("nearby frame")
+    max_pose_distance_m: 0.6                   # pose-only fallback radius around a slot centre
+    slot_margin_m: 0.1                         # slack when checking an item lies in a label's slot

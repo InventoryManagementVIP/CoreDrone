@@ -1,0 +1,25 @@
+SITL JSON: read rng_1..rng_6 into rangefinders 1..6
+
+Backport of the ArduPilot master fix in libraries/SITL/SIM_JSON.cpp. Copter-4.7.2 tests
+bitmask bits 7..12 for the rangefinder fields, but RNG_1..RNG_6 are bits 10..15, so a physics
+backend that sends a quaternion (ardupilot_gazebo) never delivers rng_1 and RNGFND1_TYPE 100
+reports "No Data". SITL-only code: flight firmware is unaffected. Drop this patch when the
+ArduPilot pin moves to a release that contains the fix (deps/README.md).
+
+--- a/libraries/SITL/SIM_JSON.cpp
++++ b/libraries/SITL/SIM_JSON.cpp
+@@ -462,11 +462,11 @@
+     update_position();
+
+     // update range finder distances
+-    for (uint8_t i=7; i<13; i++) {
+-        if ((received_bitmask &  1ULL << i) == 0) {
++    for (uint8_t i=0; i<6; i++) {
++        if ((received_bitmask & (RNG_1 << i)) == 0) {
+             continue;
+         }
+-        rangefinder_m[i-7] = state.rng[i-7];
++        rangefinder_m[i] = state.rng[i];
+     }
+
+     // update wind vane

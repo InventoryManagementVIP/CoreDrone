@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "scan_id": "3f2c9a4e-8b1d-4c6f-9a2e-5d7b1c0e4f21",
+  "mission_id": "sim_small-20261020-140211",
+  "drone_id": "coredrone-1",
+  "warehouse_id": "sim_small",
+  "timestamp": "2026-10-20T14:03:22.512Z",
+  "code": "SKU-04242",
+  "symbology": "qr",
+  "slot_code": "A1-R-L1-B1",
+  "rack_id": "A1-R",
+  "level": 1,
+  "position_map": { "x": 2.75, "y": 0.04, "z": 1.5 },
+  "confidence": 1.0,
+  "attribution_method": "label",
+  "image_ref": null
+}

@@ -1,0 +1,48 @@
+# inv_flight_interface defaults. Must match DEFAULTS in inv_flight_interface/node.py
+# (test/test_config.py enforces it). Platform-specific overrides live in inv_bringup/config/.
+flight_interface:
+  ros__parameters:
+    backend: ap_dds                     # only ap_dds today; MAVROS is the documented fallback
+    fc_namespace: /ap
+    control_rate_hz: 20.0
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_link
+
+    link_timeout_s: 1.0                 # FC link considered lost after this long without messages
+
+    # Speed and control limits (indoor, near shelves: keep these conservative)
+    max_horizontal_speed_mps: 1.0
+    max_vertical_speed_mps: 0.5
+    max_yaw_rate_rad_s: 0.8
+    max_accel_mps2: 1.5
+    gain_xy: 0.8
+    gain_z: 1.0
+    gain_yaw: 1.2
+
+    goto_position_tolerance_m: 0.15
+    goto_yaw_tolerance_rad: 0.1
+    goto_settle_s: 0.5
+    goto_timeout_s: 90.0
+    takeoff_altitude_tolerance_m: 0.15
+    takeoff_timeout_s: 120.0
+    request_retry_s: 2.0
+    land_timeout_s: 90.0
+
+    # Simple box geofence in the map frame (drone.launch.py derives it from the warehouse layout)
+    max_altitude_m: 4.0
+    geofence_enabled: true
+    geofence_min_xyz: [-50.0, -50.0, -1.0]
+    geofence_max_xyz: [50.0, 50.0, 5.0]
+    geofence_margin_m: 0.3
+
+    # Watchdogs
+    cmd_vel_timeout_s: 0.5              # /flight/cmd_vel stream: zero velocity after this ...
+    cmd_vel_hold_s: 2.0                 # ... and position hold after this
+    mission_heartbeat_timeout_s: 0.0    # 0 disables; drone.launch.py enables it when a mission runs
+    mission_lost_land_s: 30.0
+    abort_hold_s: 2.0
+
+    # External navigation (odom->base_link) forwarding to the EKF
+    external_nav_timeout_s: 0.5
+    require_external_nav: true

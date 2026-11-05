@@ -1,0 +1,10 @@
+# NOT built into the dev image. Upstream examples worth reading, at commits known to exist.
+#   mkdir -p ~/ref && vcs import --input deps/reference.repos ~/ref
+repositories:
+  # ArduPilot's own ROS 2 + Gazebo demos (iris_maze, iris_runway, ...). `main` tracks ArduPilot
+  # master: its launch files expect SITL arguments and parameter files that Copter-4.7.2 lacks,
+  # which is why sim/launch/sim_platform.launch.py does not use them (docs/adr/0005).
+  ardupilot_gz:
+    type: git
+    url: https://github.com/ArduPilot/ardupilot_gz.git
+    version: 8df4dc1726e37504e6fc8b952d02e554cfa3176f

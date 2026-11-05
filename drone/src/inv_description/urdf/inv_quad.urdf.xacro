@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<!--
+  CoreDrone airframe (real/BOM.md): Holybro X500 V2 Quad-X with a Pixhawk 6C, a Jetson Orin Nano and
+  a front-mounted OAK-D Lite.
+
+  base_link is the flight controller's body frame expressed in ROS convention (x forward, y left,
+  z up), at the centre of the frame. It is the child frame of odom->base_link that ArduPilot
+  receives as external navigation, so keep VISO_POS_* at 0 unless base_link moves away from the
+  FC's IMU.
+
+  The airframe geometry is a placeholder (simple boxes/cylinders); accurate meshes are phase 2.
+-->
+<robot name="inv_quad" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find inv_description)/urdf/sensors.xacro"/>
+
+  <xacro:property name="arm_length" value="0.25"/>
+  <xacro:property name="prop_radius" value="0.12"/>
+  <xacro:property name="body_mass" value="1.5"/>
+
+  <link name="base_link">
+    <visual>
+      <geometry><box size="0.18 0.12 0.06"/></geometry>
+      <material name="frame_black"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+    <collision>
+      <geometry><box size="0.55 0.55 0.12"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="${body_mass}"/>
+      <inertia ixx="0.029" ixy="0" ixz="0" iyy="0.029" iyz="0" izz="0.055"/>
+    </inertial>
+  </link>
+
+  <!-- Rotor discs, Quad-X numbering as in ArduPilot (1 front-right, 2 rear-left, 3 front-left, 4 rear-right). -->
+  <xacro:macro name="rotor" params="name x y">
+    <link name="${name}">
+      <visual>
+        <geometry><cylinder radius="${prop_radius}" length="0.005"/></geometry>
+        <material name="prop_grey"><color rgba="0.6 0.6 0.6 0.5"/></material>
+      </visual>
+    </link>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}"/>
+      <origin xyz="${x} ${y} 0.05" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:property name="arm_xy" value="${arm_length * 0.70710678}"/>
+  <xacro:rotor name="rotor_1" x="${arm_xy}" y="${-arm_xy}"/>
+  <xacro:rotor name="rotor_2" x="${-arm_xy}" y="${arm_xy}"/>
+  <xacro:rotor name="rotor_3" x="${arm_xy}" y="${arm_xy}"/>
+  <xacro:rotor name="rotor_4" x="${-arm_xy}" y="${-arm_xy}"/>
+
+  <!-- Flight controller IMU, at the body origin. -->
+  <link name="fc_imu_link"/>
+  <joint name="fc_imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="fc_imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:inv_sensors parent="base_link"/>
+</robot>

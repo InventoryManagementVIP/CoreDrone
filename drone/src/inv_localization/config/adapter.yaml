@@ -1,0 +1,13 @@
+# Localization adapter. Must match DEFAULTS in inv_localization/adapter.py.
+localization_adapter:
+  ros__parameters:
+    backend: groundtruth                        # set by localization.launch.py
+    input_topic: /localization/odom
+    backend_status_topic: /localization/backend_status
+    odom_frame: odom
+    base_frame: base_link
+    publish_rate_hz: 30.0                       # external-nav rate to the EKF (AP wants >= 30 Hz)
+    min_rate_hz: 15.0                           # below this the status is DEGRADED
+    lost_timeout_s: 0.5                         # no fresh odometry for this long -> LOST
+    status_rate_hz: 5.0
+    backend_status_timeout_s: 2.0

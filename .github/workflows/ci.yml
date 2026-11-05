@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - run: pip install pre-commit==4.7.0
+      - run: pre-commit run --all-files --show-diff-on-failure
+
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema==4.26.0 pyyaml==6.0.3
+      - run: python contracts/validate.py
+
+  build-test:
+    name: build-test (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          # Students on Apple Silicon use the arm64 image; this keeps it honest.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # First build of the image compiles ArduPilot SITL (~1 h on a 4-core runner); later runs hit the cache.
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/dev-image
+        with:
+          arch: ${{ matrix.arch }}
+      - name: colcon build
+        run: just build
+      - name: Package tests (colcon test)
+        run: just test-packages
+      - name: World generator, evaluation and contract tests
+        run: just test-sim
+      - name: Collect colcon logs
+        if: failure()
+        run: docker compose -f docker/compose.yaml cp dev:/ws/drone/log colcon-log || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: colcon-log-${{ matrix.arch }}
+          path: colcon-log

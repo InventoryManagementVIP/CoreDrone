@@ -1,0 +1,14 @@
+# Mission node. Must match DEFAULTS in inv_mission/node.py.
+mission:
+  ros__parameters:
+    mission: scan                  # scan | smoke (set by drone.launch.py mission:=...)
+    warehouse: sim_small
+    mission_id: ""                 # empty: <warehouse>-<timestamp>
+    takeoff_altitude_m: 1.0        # scan missions climb to the layout's transit altitude next
+    smoke_altitude_m: 1.5
+    smoke_hover_s: 10.0
+    tick_hz: 5.0
+    status_rate_hz: 2.0            # also the heartbeat inv_flight_interface watches
+    camera_frame: camera_color     # label camera link (x-forward); hover points are computed for it
+    base_frame: base_link
+    ready_timeout_s: 300.0

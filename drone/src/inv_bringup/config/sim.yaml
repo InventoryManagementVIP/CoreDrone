@@ -1,0 +1,9 @@
+# Platform overrides for platform:=sim, layered on each package's defaults.
+# Keep this small: the point of the repo is that sim and real run the same stack.
+uplink:
+  ros__parameters:
+    backend: mock
+
+inventory:
+  ros__parameters:
+    drone_id: sim-1

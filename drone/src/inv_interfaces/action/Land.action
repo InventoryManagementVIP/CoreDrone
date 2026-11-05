@@ -1,0 +1,6 @@
+# Land where the vehicle is and wait until it has disarmed.
+---
+bool success
+string message
+---
+float32 altitude_m

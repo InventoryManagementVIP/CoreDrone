@@ -1,0 +1,6 @@
+# Hardware OpenGL for Gazebo on Linux (Intel/AMD GPUs via /dev/dri). Added by the justfile when
+# /dev/dri exists; without it Gazebo falls back to software rendering.
+services:
+  dev:
+    devices:
+      - /dev/dri:/dev/dri

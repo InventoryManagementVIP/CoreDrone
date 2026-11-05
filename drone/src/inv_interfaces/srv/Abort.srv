@@ -1,0 +1,5 @@
+# Abort the current flight: cancel commands, hold, then land.
+string reason
+---
+bool accepted
+string message

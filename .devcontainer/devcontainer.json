@@ -1,0 +1,34 @@
+{
+  // VS Code / Codespaces: opens the repo inside the same `dev` container that `just` uses.
+  // Build pins come from docker/.env. Colcon build/install/log live in Docker volumes.
+  "name": "CoreDrone dev",
+  "dockerComposeFile": ["../docker/compose.yaml"],
+  "service": "dev",
+  "workspaceFolder": "/ws",
+  "remoteUser": "dev",
+  "shutdownAction": "none",
+  "forwardPorts": [8765],
+  "portsAttributes": {
+    "8765": { "label": "Foxglove (ws://localhost:8765)" }
+  },
+  "postAttachCommand": "echo 'In the container: just build, just test, just sim-headless'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "ms-iot.vscode-ros",
+        "redhat.vscode-yaml",
+        "redhat.vscode-xml",
+        "nefrob.vscode-just-syntax",
+        "ms-vscode.cpptools"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "python.analysis.extraPaths": ["/opt/ros/jazzy/lib/python3.12/site-packages", "/opt/underlay/install/lib/python3.12/site-packages"],
+        "[python]": { "editor.defaultFormatter": "charliermarsh.ruff" },
+        "files.eol": "\n"
+      }
+    }
+  }
+}

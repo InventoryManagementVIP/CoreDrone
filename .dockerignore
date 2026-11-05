@@ -1,0 +1,15 @@
+# Docker build context = repo root. Allowlist only what the Dockerfiles COPY, so the context
+# stays small and colcon/sim outputs never leak into an image.
+*
+!deps/
+!docker/
+!drone/src/
+!config/
+!contracts/
+!real/
+!sim/launch/
+!sim/params/
+
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/

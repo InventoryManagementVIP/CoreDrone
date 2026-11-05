@@ -1,0 +1,43 @@
+name: nightly
+
+# Every night: the full scan mission on sim_small with the evaluation report as an artifact (the
+# team's regression metric), and the multi-arch dev image rebuilt and published.
+on:
+  schedule:
+    - cron: "0 7 * * *"   # 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    uses: ./.github/workflows/docker-publish.yml
+    permissions:
+      contents: read
+      packages: write
+
+  sim-mission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/dev-image
+        with:
+          arch: amd64
+      - run: just build
+      - name: Scan mission on sim_small + evaluation
+        run: just sim-mission sim_small
+        timeout-minutes: 120
+      - name: Collect logs
+        if: always()
+        run: docker compose -f docker/compose.yaml cp dev:/home/dev/.ros/log ros-log || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sim-mission-report
+          path: |
+            runs/latest/evaluation.json
+            runs/latest/scans.csv
+            runs/latest/inventory.sqlite
+            ros-log

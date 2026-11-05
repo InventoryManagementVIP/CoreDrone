@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<!--
+  Sensor extrinsics: the ONE source of truth for where every sensor sits on the airframe.
+
+  The sim drone model (sim/models/generate_drone_model.py) reads these poses from the expanded
+  URDF; never copy the numbers by hand. Frames follow REP-103/REP-105: *_link frames are
+  x-forward/y-left/z-up, *_optical_frame frames are z-forward/x-right/y-down.
+
+  The camera module's own geometry is the OAK-D Lite's datasheet (real/BOM.md). Mounting positions
+  are PLACEHOLDERS: replace them with the bracket's drawing, then with Kalibr results (real/sensors/calibration/), in a
+  PR that the inv_perception and sim CODEOWNERS review.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Stereo/depth/IMU camera module, front-mounted, looking forward. -->
+  <xacro:property name="camera_x" value="0.12"/>
+  <xacro:property name="camera_y" value="0.0"/>
+  <xacro:property name="camera_z" value="-0.03"/>
+  <xacro:property name="camera_pitch" value="0.0"/>
+  <!-- Distance between the two global-shutter imagers (OAK-D Lite: 75 mm). -->
+  <xacro:property name="stereo_baseline" value="0.075"/>
+  <!-- RGB (label) imager offset from the module centre, along camera_link y: it sits centrally. -->
+  <xacro:property name="color_y" value="0.0"/>
+
+  <!-- Downward rangefinder and optical-flow sensor: simulated, not on the parts list yet. -->
+  <xacro:property name="rangefinder_x" value="0.0"/>
+  <xacro:property name="rangefinder_y" value="0.0"/>
+  <xacro:property name="rangefinder_z" value="-0.06"/>
+  <xacro:property name="flow_x" value="0.0"/>
+  <xacro:property name="flow_y" value="0.05"/>
+  <xacro:property name="flow_z" value="-0.06"/>
+
+  <xacro:macro name="optical_frame" params="name parent">
+    <link name="${name}"/>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${name}"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="fixed_link" params="name parent xyz rpy">
+    <link name="${name}"/>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${name}"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="inv_sensors" params="parent">
+    <!-- Camera module body -->
+    <link name="camera_link">
+      <visual>
+        <geometry><box size="0.0175 0.091 0.028"/></geometry>
+        <material name="camera_grey"><color rgba="0.3 0.3 0.3 1"/></material>
+      </visual>
+    </link>
+    <joint name="camera_link_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="camera_link"/>
+      <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 ${camera_pitch} 0"/>
+    </joint>
+
+    <!-- Stereo pair (VSLAM input). Depth is registered to the left imager. -->
+    <xacro:fixed_link name="camera_left" parent="camera_link" xyz="0 ${stereo_baseline/2} 0" rpy="0 0 0"/>
+    <xacro:fixed_link name="camera_right" parent="camera_link" xyz="0 ${-stereo_baseline/2} 0" rpy="0 0 0"/>
+    <xacro:optical_frame name="camera_left_optical_frame" parent="camera_left"/>
+    <xacro:optical_frame name="camera_right_optical_frame" parent="camera_right"/>
+    <xacro:fixed_link name="camera_depth" parent="camera_left" xyz="0 0 0" rpy="0 0 0"/>
+    <xacro:optical_frame name="camera_depth_optical_frame" parent="camera_depth"/>
+
+    <!-- RGB label camera (barcode/QR/AprilTag decoding). -->
+    <xacro:fixed_link name="camera_color" parent="camera_link" xyz="0 ${color_y} 0" rpy="0 0 0"/>
+    <xacro:optical_frame name="camera_color_optical_frame" parent="camera_color"/>
+
+    <!-- Camera module IMU (hardware-synced with the imagers). -->
+    <xacro:fixed_link name="camera_imu" parent="camera_link" xyz="0 0 0" rpy="0 0 0"/>
+    <xacro:optical_frame name="camera_imu_optical_frame" parent="camera_imu"/>
+
+    <!-- Downward-looking range sensors: +x points at the floor. -->
+    <xacro:fixed_link name="rangefinder_link" parent="${parent}"
+                      xyz="${rangefinder_x} ${rangefinder_y} ${rangefinder_z}" rpy="0 ${pi/2} 0"/>
+    <xacro:fixed_link name="flow_link" parent="${parent}"
+                      xyz="${flow_x} ${flow_y} ${flow_z}" rpy="0 ${pi/2} 0"/>
+  </xacro:macro>
+</robot>

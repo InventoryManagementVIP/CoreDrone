@@ -1,0 +1,26 @@
+# Isaac ROS Visual SLAM (cuVSLAM), Isaac ROS 4.6 on ROS 2 Jazzy.
+# UNTESTED in this repo: needs CUDA (docker/isaac-x86.Dockerfile on an RTX GPU, or the Jetson).
+# Parameter names are from the release-4.6 docs; verify on hardware before the first flight.
+# Isaac ROS 5.0 renames the package to isaac_ros_cuvslam (docs/adr/0002-ros-distro.md).
+visual_slam_node:
+  ros__parameters:
+    num_cameras: 2
+    tracking_mode: 1                     # 0 multi-camera, 1 visual-inertial, 2 RGBD
+    rectified_images: true               # the OAK driver publishes a rectified pair (oak_d_lite.yaml)
+    enable_image_denoising: false
+    base_frame: base_link                # cuVSLAM uses TF base_link->camera to output base_link directly
+    odom_frame: odom
+    map_frame: map
+    imu_frame: camera_imu_optical_frame
+    camera_optical_frames: [camera_left_optical_frame, camera_right_optical_frame]
+    publish_odom_to_base_tf: true
+    publish_map_to_odom_tf: true
+    enable_localization_n_mapping: true
+    image_jitter_threshold_ms: 34.0
+    # IMU noise model: Isaac defaults, PLACEHOLDER. Replace with the OAK-D Lite BMI270's
+    # Allan-variance values (real/sensors/calibration/README.md).
+    gyro_noise_density: 0.000244
+    gyro_random_walk: 0.000019393
+    accel_noise_density: 0.001862
+    accel_random_walk: 0.003
+    calibration_frequency: 200.0

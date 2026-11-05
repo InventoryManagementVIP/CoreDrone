@@ -1,0 +1,94 @@
+# CoreDrone containers. Normally driven by `just` (see the justfile and docs/onboarding/).
+#
+#   dev       long-running workspace container; `just shell/build/test/sim` exec into it
+#   sim       headless simulation + Foxglove, sharing dev's network (`docker compose --profile sim up sim`)
+#   foxglove  foxglove_bridge only, sharing dev's network
+#   isaac     Isaac ROS image for NVIDIA RTX hosts (`--profile isaac`), see docs/onboarding/linux-nvidia.md
+#
+# Build pins (ROS_DISTRO, image names) come from docker/.env, which compose loads automatically.
+# Colcon build/install/log live in named volumes: faster on macOS/Windows bind mounts, and they
+# never end up in OneDrive/iCloud-synced checkouts.
+
+name: coredrone
+
+x-dev: &dev
+  image: ${DEV_IMAGE}:${ROS_DISTRO}
+  build:
+    context: ..
+    dockerfile: docker/dev.Dockerfile
+    args:
+      ROS_DISTRO: ${ROS_DISTRO}
+    cache_from:
+      - ${DEV_IMAGE}:${ROS_DISTRO}
+  environment:
+    ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    # MAVProxy also forwards MAVLink here, so Mission Planner / QGroundControl on the host see SITL.
+    INV_GCS_OUT: ${INV_GCS_OUT:-udpout:host.docker.internal:14550}
+  volumes:
+    - ..:/ws
+    - colcon_build:/ws/drone/build
+    - colcon_install:/ws/drone/install
+    - colcon_log:/ws/drone/log
+    - ccache:/home/dev/.cache/ccache
+    - pre_commit:/home/dev/.cache/pre-commit
+  extra_hosts:
+    - host.docker.internal:host-gateway
+  shm_size: 2gb
+  init: true
+  working_dir: /ws
+
+services:
+  dev:
+    <<: *dev
+    command: sleep infinity
+    ports:
+      - "8765:8765"   # foxglove_bridge (connect Foxglove to ws://localhost:8765)
+
+  sim:
+    <<: *dev
+    profiles: [sim]
+    network_mode: service:dev
+    ipc: service:dev
+    command: >-
+      ros2 launch inv_bringup drone.launch.py platform:=sim headless:=true foxglove:=true
+      warehouse:=${W:-sim_small}
+
+  foxglove:
+    <<: *dev
+    profiles: [foxglove]
+    network_mode: service:dev
+    ipc: service:dev
+    command: ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765 -p address:=0.0.0.0
+
+  isaac:
+    profiles: [isaac]
+    image: coredrone-isaac-x86:${ISAAC_ROS_RELEASE}
+    build:
+      context: ..
+      dockerfile: docker/isaac-x86.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO}
+        ISAAC_ROS_BASE: ${ISAAC_ROS_BASE_X86}
+    # Shares dev's network and IPC: Gazebo/SITL run in dev, VSLAM/nvblox here, one ROS graph.
+    network_mode: service:dev
+    ipc: service:dev
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    volumes:
+      - ..:/ws
+    working_dir: /ws
+    command: sleep infinity
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  colcon_build:
+  colcon_install:
+  colcon_log:
+  ccache:
+  pre_commit:

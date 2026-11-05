@@ -1,0 +1,82 @@
+# Simulated sensors of the CoreDrone model: intrinsics, rates and ROS topic names only.
+# Sensor POSES are not here: sim/worldgen/drone_model.py reads them from the URDF
+# (drone/src/inv_description/urdf/sensors.xacro), the single source of truth for extrinsics.
+#
+# Cameras follow the OAK-D Lite's datasheet (real/BOM.md). The label camera renders below the real
+# 1080p because software rendering is slow; the real camera has more pixels on each label.
+# ROS topic names are the canonical ones from docs/interfaces.md.
+
+# Sensors the flight controller needs: always present. The rangefinder is also wired into
+# ArduPilotPlugin, so SITL's RNGFND1_TYPE 100 gets real ranges (EK3_SRC1_POSZ = rangefinder).
+flight_sensors: [rangefinder]
+
+# Extra (perception) sensors per world variant. Software rendering (no GPU, CI) is slow, so the
+# smoke test flies without cameras and the scan mission only renders the label camera.
+sensor_sets:
+  none: []
+  label: [color]
+  full: [left, right, depth, color, imu]
+
+sensors:
+  color:                              # RGB label camera (barcode / QR / AprilTag decoding)
+    type: camera
+    link: camera_color                # URDF link (x-forward), the sensor's pose
+    frame_id: camera_color_optical_frame
+    ros_topic: /camera/color/image_raw
+    ros_info_topic: /camera/color/camera_info
+    width: 960
+    height: 540
+    format: R8G8B8
+    horizontal_fov: 1.204             # rad (69 deg, IMX214)
+    rate_hz: 5
+    clip: [0.05, 30.0]
+  left:                               # global-shutter stereo pair (VSLAM input)
+    type: camera
+    link: camera_left
+    frame_id: camera_left_optical_frame
+    ros_topic: /camera/left/image_raw
+    ros_info_topic: /camera/left/camera_info
+    width: 640
+    height: 480
+    format: L8
+    horizontal_fov: 1.274             # rad (73 deg, OV7251)
+    rate_hz: 30
+    clip: [0.05, 30.0]
+  right:
+    type: camera
+    link: camera_right
+    frame_id: camera_right_optical_frame
+    ros_topic: /camera/right/image_raw
+    ros_info_topic: /camera/right/camera_info
+    width: 640
+    height: 480
+    format: L8
+    horizontal_fov: 1.274
+    rate_hz: 30
+    clip: [0.05, 30.0]
+  depth:
+    type: depth_camera
+    link: camera_depth
+    frame_id: camera_depth_optical_frame
+    ros_topic: /camera/depth/image_raw
+    ros_info_topic: /camera/depth/camera_info
+    width: 640
+    height: 480
+    format: R_FLOAT32
+    horizontal_fov: 1.274
+    rate_hz: 15
+    clip: [0.4, 8.0]                  # ideal depth range
+  imu:                                # camera module IMU (BMI270)
+    type: imu
+    link: camera_imu
+    frame_id: camera_imu              # data is expressed in the link's x-forward axes
+    ros_topic: /camera/imu
+    rate_hz: 200
+  rangefinder:                        # downward rangefinder: EKF height source (via ArduPilotPlugin)
+    type: gpu_lidar
+    link: rangefinder_link
+    frame_id: rangefinder_link
+    ros_topic: /rangefinder/scan
+    rate_hz: 50
+    range: [0.05, 8.0]
+    ardupilot_rangefinder_index: 1    # -> JSON rng_1 -> SITL rangefinder instance 1 (RNGFND1_*)

@@ -1,0 +1,14 @@
+# Platform overrides for platform:=real, layered on each package's defaults. UNVERIFIED: the parts
+# are chosen (real/BOM.md) but untested. Values that depend on the delivered hardware are marked TODO(hardware).
+flight_interface:
+  ros__parameters:
+    max_horizontal_speed_mps: 0.5     # first flights: slower than sim
+    max_vertical_speed_mps: 0.3
+
+uplink:
+  ros__parameters:
+    backend: mock                     # TODO(phase-2): http, once the backend contract is signed off
+
+inventory:
+  ros__parameters:
+    drone_id: coredrone-1             # TODO(hardware): one ID per airframe

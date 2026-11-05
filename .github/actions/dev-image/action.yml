@@ -1,0 +1,42 @@
+name: dev image
+description: >
+  Read the pins in docker/.env, build (or reuse from the registry cache) the dev image for this
+  runner's architecture, install just, and start the dev container. After this step every job
+  runs exactly what students run: `just build`, `just test`, `just sim-smoke`, ...
+inputs:
+  arch:
+    description: amd64 or arm64 (must match the runner)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Load build pins (docker/.env)
+      shell: bash
+      run: grep -E '^[A-Z_]+=' docker/.env >> "$GITHUB_ENV"
+
+    - uses: docker/setup-buildx-action@v4
+
+    - name: Build dev image (cached)
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: docker/dev.Dockerfile
+        platforms: linux/${{ inputs.arch }}
+        build-args: ROS_DISTRO=${{ env.ROS_DISTRO }}
+        tags: ${{ env.DEV_IMAGE }}:${{ env.ROS_DISTRO }}
+        load: true
+        # The registry cache is written by docker-publish.yml on main; the GHA cache speeds up
+        # repeated pushes to the same PR.
+        cache-from: |
+          type=registry,ref=${{ env.DEV_IMAGE }}:buildcache-${{ inputs.arch }}
+          type=gha,scope=dev-${{ inputs.arch }}
+        cache-to: type=gha,scope=dev-${{ inputs.arch }},mode=max
+
+    - uses: extractions/setup-just@v4
+
+    - name: Start the dev container
+      shell: bash
+      run: |
+        # The runner's checkout is owned by UID 1001; the container user is UID 1000.
+        chmod -R a+rwX "$GITHUB_WORKSPACE"
+        just up

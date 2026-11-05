@@ -1,0 +1,24 @@
+# Line endings: LF everywhere. Scripts, launch files and parameter files run inside Linux
+# containers even when the checkout lives on Windows (core.autocrlf would otherwise add CR).
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.mcap binary
+*.db3 binary
+*.sqlite binary
+
+# Git LFS: meshes and textures for hand-made sim models (generated worlds are gitignored).
+# Run `git lfs install` once per machine (docs/onboarding/).
+sim/models/**/*.dae filter=lfs diff=lfs merge=lfs -text
+sim/models/**/*.stl filter=lfs diff=lfs merge=lfs -text
+sim/models/**/*.obj filter=lfs diff=lfs merge=lfs -text
+sim/models/**/*.png filter=lfs diff=lfs merge=lfs -text
+sim/models/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+sim/worlds/**/*.dae filter=lfs diff=lfs merge=lfs -text
+sim/worlds/**/*.png filter=lfs diff=lfs merge=lfs -text

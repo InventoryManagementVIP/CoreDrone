@@ -1,0 +1,25 @@
+# Onboard stack on the Jetson. UNTESTED SKELETON. Started by systemd (systemd/coredrone.service).
+name: coredrone-onboard
+
+services:
+  stack:
+    image: ${JETSON_IMAGE:-coredrone-jetson:latest}   # built from docker/jetson.Dockerfile
+    runtime: nvidia
+    network_mode: host                # ROS 2 discovery and MAVLink on the vehicle network
+    ipc: host                         # Fast DDS shared memory with tools run on the host
+    restart: "no"                     # systemd owns restarts
+    env_file:
+      - /etc/coredrone/coredrone.env  # ROS_DOMAIN_ID, backend credentials (never in git)
+    environment:
+      INV_ROOT: /opt/inv
+    devices:
+      - /dev/ttyTHS1:/dev/ttyTHS1     # TODO(hardware): confirm the 40-pin UART's device name
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb     # OAK-D Lite over USB
+      - /var/lib/coredrone/runs:/opt/inv/runs         # inventory queue + exports survive restarts
+      - /var/lib/coredrone/bags:/opt/inv/bags
+    device_cgroup_rules:
+      - "c 189:* rmw"                 # USB devices (hot-plug)
+    command: >-
+      ros2 launch inv_bringup drone.launch.py platform:=real localization:=isaac mapping:=none
+      perception:=cpu mission:=none warehouse:=${WAREHOUSE:-sim_small} run_dir:=/opt/inv/runs/latest

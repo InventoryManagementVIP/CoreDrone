@@ -1,0 +1,16 @@
+# Fly to a pose (position + yaw) and stop there. The vehicle keeps holding the target after
+# the goal succeeds, until the next command.
+# target.header.frame_id must be "map" (or empty, meaning "map"). Only the yaw of the
+# orientation is used.
+geometry_msgs/PoseStamped target
+# 0 = use the flight interface defaults.
+float32 max_speed_mps
+float32 position_tolerance_m
+float32 yaw_tolerance_rad
+---
+bool success
+string message
+float32 final_distance_m
+---
+float32 distance_m
+float32 yaw_error_rad

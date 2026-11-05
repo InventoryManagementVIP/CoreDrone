@@ -1,0 +1,16 @@
+# `groundtruth` backend (sim only). Must match DEFAULTS in inv_localization/groundtruth.py.
+# Turn on noise/drift/dropouts to rehearse VSLAM error and the localization-lost failsafe,
+# for example with a params override file passed to drone.launch.py.
+localization_groundtruth:
+  ros__parameters:
+    input_topic: /sim/ground_truth/odom
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_link
+    position_noise_m: 0.0             # white noise per axis (std dev)
+    yaw_noise_rad: 0.0
+    drift_m_per_sqrt_s: 0.0           # horizontal random walk, e.g. 0.01 for mild VO drift
+    yaw_drift_rad_per_sqrt_s: 0.0
+    seed: 0
+    dropouts: ""                      # "start_s:duration_s,...", e.g. "40:3" loses tracking at t=40 s
+    status_rate_hz: 5.0

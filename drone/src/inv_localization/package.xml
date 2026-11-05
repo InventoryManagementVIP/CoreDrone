@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>inv_localization</name>
+  <version>0.1.0</version>
+  <description>
+    Swappable localization (localization:=groundtruth|isaac|rtabmap). Every backend publishes TF
+    map->odom->base_link and /localization/odom; the adapter turns that into odom->base_link for the
+    flight controller's EKF and reports tracking health on /localization/status.
+  </description>
+  <maintainer email="coredrone@example.com">CoreDrone team</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>inv_interfaces</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>tf2_ros_py</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <!-- localization:=isaac additionally needs isaac_ros_visual_slam, which only exists in the
+       Isaac ROS images (docker/isaac-x86.Dockerfile, docker/jetson.Dockerfile), so it is not listed. -->
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-yaml</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>launch_testing_ros</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

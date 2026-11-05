@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:coredrone:contracts:scan_record",
+  "title": "ScanRecord",
+  "description": "One item read by the drone, as sent to the backend. Owned by this repo (format) and the app team (database). Changes need approval from both CODEOWNERS groups; see contracts/README.md for versioning rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scan_id",
+    "mission_id",
+    "drone_id",
+    "warehouse_id",
+    "timestamp",
+    "code",
+    "symbology",
+    "confidence",
+    "attribution_method"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Version of this contract. Major version 1; minor versions only add optional fields.",
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "examples": ["1.0"]
+    },
+    "scan_id": {
+      "description": "UUID generated on the drone. Idempotency key: the backend upserts on it.",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "mission_id": {
+      "description": "Identifier of the flight that produced the read.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "drone_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "warehouse_id": {
+      "description": "Matches warehouse_id in config/warehouses/<name>.yaml.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "timestamp": {
+      "description": "Detection time, RFC 3339 in UTC, for example 2026-10-20T14:03:22.512Z.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "code": {
+      "description": "Decoded payload. AprilTags use <family>:<id>, for example tag36h11:17.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "symbology": {
+      "type": "string",
+      "enum": ["qr", "ean13", "code128", "apriltag", "other"]
+    },
+    "slot_code": {
+      "description": "Rack slot the item was attributed to; null when unattributed.",
+      "type": ["string", "null"],
+      "maxLength": 64
+    },
+    "rack_id": {
+      "type": ["string", "null"],
+      "maxLength": 64
+    },
+    "level": {
+      "description": "Shelf level, 0 = lowest.",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "position_map": {
+      "description": "Label position in the warehouse map frame (ENU, metres); null when unknown.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y", "z"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "z": { "type": "number" }
+          }
+        }
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "attribution_method": {
+      "description": "label: a location label/tag was seen in the same or a nearby frame. pose: SLAM pose only. none: not attributed.",
+      "type": "string",
+      "enum": ["label", "pose", "none"]
+    },
+    "image_ref": {
+      "description": "Optional reference to a stored image crop (URI or object key).",
+      "type": ["string", "null"],
+      "maxLength": 1024
+    }
+  }
+}

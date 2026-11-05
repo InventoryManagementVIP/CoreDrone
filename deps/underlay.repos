@@ -1,0 +1,29 @@
+# Underlay sources, built once inside docker/dev.Dockerfile with:
+#   vcs import --shallow --input deps/underlay.repos src
+#
+# Every entry is pinned to a tag or a commit SHA, never a moving branch.
+# Why each pin, and how to bump it: deps/README.md.
+repositories:
+  # ArduPilot Copter stable, 11-Oct-2026 (commit fb773567896014da007bca58358704d4a0d8516f).
+  # Provides arducopter SITL with AP_DDS, plus the ardupilot_msgs and ardupilot_sitl ROS 2 packages.
+  ardupilot:
+    type: git
+    url: https://github.com/ArduPilot/ardupilot.git
+    version: Copter-4.7.2
+  # ArduPilot <-> Gazebo Harmonic plugin and the iris models. `ros2` branch head, 2026-04-05.
+  ardupilot_gazebo:
+    type: git
+    url: https://github.com/ArduPilot/ardupilot_gazebo.git
+    version: cc0290d964dfa373531963a8fc39093a0836af0a
+  # micro-ROS agent (XRCE-DDS <-> ROS 2). `jazzy` branch head, 2026-09-04.
+  micro_ros_agent:
+    type: git
+    url: https://github.com/micro-ROS/micro-ROS-Agent.git
+    version: 7c932329ad5591ef23942ef1962534258c16b000
+  # IDL code generator used by ArduPilot's waf build when --enable-DDS is set.
+  # v4.7.1 is what ArduPilot's own CI and Dockerfile use at the Copter-4.7.2 tag.
+  # Not a colcon package (the Dockerfile drops a COLCON_IGNORE in it).
+  Micro-XRCE-DDS-Gen:
+    type: git
+    url: https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git
+    version: v4.7.1

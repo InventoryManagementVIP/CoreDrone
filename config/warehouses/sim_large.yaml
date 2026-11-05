@@ -1,0 +1,82 @@
+# Larger sim warehouse for local testing (not run in CI):
+# 4 aisles x 2 racks x 4 levels x 8 bays = 256 slots.
+# Schema: contracts/warehouse_layout.schema.json. Map frame: ENU, metres, z = 0 on the floor.
+schema_version: "1.0"
+warehouse_id: sim_large
+name: "Local test warehouse: 4 aisles x 2 racks x 4 levels x 8 bays"
+
+geodetic_origin:
+  latitude_deg: 40.4237
+  longitude_deg: -86.9212
+  altitude_m: 190.0
+
+takeoff:
+  x: 0.0
+  y: 1.5
+  yaw_deg: 0.0
+
+rack_defaults:
+  bays: 8
+  bay_width_m: 1.0
+  depth_m: 1.0
+  level_heights_m: [0.40, 1.40, 2.40, 3.40]
+  height_m: 4.4
+  beam_height_m: 0.12
+
+labels:
+  location:
+    kind: apriltag
+    family: tag36h11
+    size_m: 0.09                # black square; the printed label adds a white border
+    first_id: 0
+  item:
+    kind: qr
+    size_m: 0.18                # QR symbol edge, excluding the quiet zone
+    payload_format: "{sku}"
+
+slot_code_format: "{rack}-L{level}-B{bay:02d}"
+
+scan:
+  standoff_m: 1.0
+  camera_height_offset_m: 0.10
+  hover_s: 1.5
+  transit_altitude_m: 1.2
+  speed_mps: 0.8
+  order: serpentine
+
+# Rack faces: aisle centre +/- 1.5 m; back-to-back racks are 2 x 1.0 m deep.
+aisles:
+  - id: A1
+    start: {x: 1.0, y: 1.5}
+    end: {x: 10.0, y: 1.5}
+    width_m: 3.0
+    racks:
+      - {id: A1-R, side: right, offset_m: 0.5}
+      - {id: A1-L, side: left, offset_m: 0.5}
+  - id: A2
+    start: {x: 1.0, y: 6.5}
+    end: {x: 10.0, y: 6.5}
+    width_m: 3.0
+    racks:
+      - {id: A2-R, side: right, offset_m: 0.5}
+      - {id: A2-L, side: left, offset_m: 0.5}
+  - id: A3
+    start: {x: 1.0, y: 11.5}
+    end: {x: 10.0, y: 11.5}
+    width_m: 3.0
+    racks:
+      - {id: A3-R, side: right, offset_m: 0.5}
+      - {id: A3-L, side: left, offset_m: 0.5}
+  - id: A4
+    start: {x: 1.0, y: 16.5}
+    end: {x: 10.0, y: 16.5}
+    width_m: 3.0
+    racks:
+      - {id: A4-R, side: right, offset_m: 0.5}
+      - {id: A4-L, side: left, offset_m: 0.5}
+
+sim:
+  seed: 7
+  fill_ratio: 0.8
+  sku_format: "SKU-{n:05d}"
+  box_size_m: [0.45, 0.45, 0.40]
