@@ -112,5 +112,5 @@ changes parameters. Packages and what they own:
 ## Phase 2 (stubs marked `TODO(phase-2)` in the code)
 
 nvblox corridor check, Isaac GPU AprilTags, rtabmap backend, Isaac VSLAM status relay, HTTP backend
-for the uplink, deduplication/confidence fusion, retries and richer failsafe branches in the
+for the uplink, confidence fusion, retries and richer failsafe branches in the
 mission, 1D barcode labels in sim.

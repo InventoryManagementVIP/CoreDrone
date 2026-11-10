@@ -10,7 +10,12 @@ Phase 1 rule (docs/adr/0006-label-based-slot-attribution.md):
   2. POSE: otherwise, the slot whose centre is nearest to the item's map position, if within
      `max_pose_distance_m`. VSLAM drift makes this the weaker fallback.
   3. NONE: record the read without a slot.
-TODO(phase-2): deduplication across hover points and confidence fusion.
+
+Within a mission an item code is one box per slot (`worth_recording`): a barcode names a product,
+so the same code in two slots is two boxes. Only a LABEL attribution can establish a slot, since
+a POSE fallback can land in the neighbouring slot through VSLAM drift. Boxes of one product side
+by side in one slot are counted once.
+TODO(phase-2): confidence fusion, and later corrections superseding records already queued.
 """
 
 from __future__ import annotations
@@ -97,6 +102,15 @@ class Attributor:
         return abs(dx * ax + dy * ay) <= width / 2 + m and -m <= dz <= height + m
 
 
-def better(new_method: str, old_method: str | None) -> bool:
-    """Is an attribution by `new_method` worth recording after one by `old_method`?"""
-    return old_method is None or _RANK[new_method] > _RANK[old_method]
+def worth_recording(a: Attribution, recorded: dict[str | None, str]) -> bool:
+    """Is this read of an item code worth a scan record, given that code's records this mission?
+
+    `recorded` maps slot code (None for no slot) -> attribution method already recorded there.
+    A LABEL read counts once per slot. A weaker read only counts while the code has nothing better
+    anywhere: then it is most likely the same box, seen from a worse angle.
+    """
+    if a.method == LABEL:
+        return recorded.get(a.slot.code) != LABEL
+    if a.method == POSE:
+        return all(slot is None for slot in recorded)
+    return not recorded

@@ -6,7 +6,7 @@ import threading
 import pytest
 import yaml
 
-from inv_inventory.attribution import LABEL, NONE, POSE, Attributor, Detection, better
+from inv_inventory.attribution import LABEL, NONE, POSE, Attribution, Attributor, Detection, worth_recording
 from inv_inventory.node import DEFAULTS
 from inv_inventory.queue import ScanQueue
 from inv_inventory.records import make_scan_record
@@ -101,9 +101,41 @@ def test_item_anywhere_in_the_bay_counts(layout):
         assert attr.attribute_frame(1.0, frame)[0].method == method, along
 
 
-def test_better():
-    assert better(LABEL, None) and better(LABEL, POSE) and better(POSE, NONE)
-    assert not better(POSE, LABEL) and not better(LABEL, LABEL)
+def _read(layout, slot_code, method):
+    return Attribution(Detection("SKU-1", "qr", (0, 0)), layout.slot(slot_code) if slot_code else None, method)
+
+
+def _replay(layout, reads):
+    """Feed reads of one code through worth_recording as the node does; return what was recorded."""
+    recorded, kept = {}, []
+    for slot_code, method in reads:
+        a = _read(layout, slot_code, method)
+        if worth_recording(a, recorded):
+            recorded[slot_code] = method
+            kept.append((slot_code, method))
+    return kept
+
+
+def test_same_product_in_two_slots_is_two_boxes(layout):
+    reads = [("A1-R-L0-B0", LABEL), ("A1-R-L0-B0", LABEL), ("A2-L-L1-B2", LABEL), ("A2-L-L1-B2", LABEL)]
+    assert _replay(layout, reads) == [("A1-R-L0-B0", LABEL), ("A2-L-L1-B2", LABEL)]
+
+
+def test_weaker_reads_are_upgraded_not_multiplied(layout):
+    reads = [(None, NONE), ("A1-R-L0-B1", POSE), (None, NONE), ("A1-R-L0-B1", LABEL), ("A1-R-L0-B1", POSE)]
+    assert _replay(layout, reads) == [(None, NONE), ("A1-R-L0-B1", POSE), ("A1-R-L0-B1", LABEL)]
+
+
+def test_pose_reads_do_not_add_boxes(layout):
+    # Drift can put one box in the neighbouring bay: only a label read establishes a second slot.
+    assert _replay(layout, [("A1-R-L0-B1", POSE), ("A1-R-L0-B2", POSE)]) == [("A1-R-L0-B1", POSE)]
+    assert _replay(layout, [("A1-R-L0-B1", LABEL), ("A1-R-L0-B2", POSE)]) == [("A1-R-L0-B1", LABEL)]
+
+
+def test_a_label_read_after_a_pose_read_is_recorded(layout):
+    # Both stay queued; consumers count the label slot and drop the pose read (contracts/README.md).
+    reads = [("A1-R-L0-B2", POSE), ("A1-R-L0-B1", LABEL)]
+    assert _replay(layout, reads) == reads
 
 
 def _record(**kw):

@@ -24,7 +24,7 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from inv_interfaces.msg import InventoryItem, InventoryItemArray, LabelDetectionArray, MissionStatus
-from inv_inventory.attribution import Attributor, Detection, better
+from inv_inventory.attribution import Attributor, Detection, worth_recording
 from inv_inventory.queue import ScanQueue
 from inv_inventory.records import make_scan_record
 
@@ -67,7 +67,7 @@ class InventoryNode(Node):
         )
         self.queue = ScanQueue(self.p["db_path"])
         self.mission_id = self.p["mission_id"]
-        self._best: dict[str, str] = {}  # code -> best attribution method recorded this mission
+        self._recorded: dict[str, dict[str | None, str]] = {}  # code -> {slot code: method} this mission
         self._pending: dict[tuple[int, int], dict] = {}  # stamp -> {"msgs": [...], "first": wall time}
 
         self.tf_buffer = Buffer()
@@ -83,7 +83,7 @@ class InventoryNode(Node):
     def _on_mission(self, msg: MissionStatus) -> None:
         if msg.mission_id and msg.mission_id != self.mission_id and not self.p["mission_id"]:
             self.mission_id = msg.mission_id
-            self._best.clear()
+            self._recorded.clear()
             self.get_logger().info(f"mission {self.mission_id}")
 
     def _on_detections(self, msg: LabelDetectionArray) -> None:
@@ -114,12 +114,11 @@ class InventoryNode(Node):
     def _process(self, msgs: list[LabelDetectionArray]) -> None:
         header = msgs[0].header
         stamp_s = header.stamp.sec + header.stamp.nanosec * 1e-9
-        detections, raw = [], {}
-        for msg in msgs:
-            for d in msg.detections:
-                det = Detection(d.code, d.symbology, (d.center_x_px, d.center_y_px), d.confidence, self._to_map(msg, d))
-                detections.append(det)
-                raw[d.code] = det
+        detections = [
+            Detection(d.code, d.symbology, (d.center_x_px, d.center_y_px), d.confidence, self._to_map(msg, d))
+            for msg in msgs
+            for d in msg.detections
+        ]
         if not detections:
             return
         out = InventoryItemArray()
@@ -130,9 +129,9 @@ class InventoryNode(Node):
             dt.datetime.fromtimestamp(stamp_s, dt.timezone.utc) if stamp_s > 1e9 else dt.datetime.now(dt.timezone.utc)
         )
         for a in self.attributor.attribute_frame(stamp_s, detections):
-            if not better(a.method, self._best.get(a.item.code)):
+            recorded = self._recorded.setdefault(a.item.code, {})
+            if not worth_recording(a, recorded):
                 continue
-            self._best[a.item.code] = a.method
             record = make_scan_record(
                 mission_id=self.mission_id or "unknown",
                 drone_id=self.p["drone_id"],
@@ -148,6 +147,7 @@ class InventoryNode(Node):
                 attribution_method=a.method,
             )
             self.queue.put(record)
+            recorded[record["slot_code"]] = a.method  # only once it is safely queued
             item = InventoryItem()
             item.header = out.header
             item.scan_id, item.mission_id, item.code = record["scan_id"], record["mission_id"], a.item.code

@@ -32,7 +32,9 @@ go to a Supabase/Postgres backend that the app team owns.
 
 - A mock backend (with simulated failures) makes the whole path testable in CI.
 - The HTTP backend is a stub until the app team signs off the table schema (phase 2).
-- Duplicate reads of the same item are kept with distinct `scan_id`s; deduplication is phase 2.
+- The drone records an item code once per label-attributed slot per mission, plus weaker reads
+  only while nothing better exists (contracts/README.md has the box-counting rule). Each record has
+  its own `scan_id`. Merging corrections into records already queued is phase 2.
 
 ## Revisit when
 

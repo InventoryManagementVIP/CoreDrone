@@ -15,6 +15,11 @@
   a new major version, coordinated with the app team before merging.
 - Changes need approval from **both** CODEOWNERS groups (drone and app).
 - The uplink validates every record against this schema before sending; unit tests do too.
+- `code` names a product, not a physical box. Within one mission the drone records a code once per
+  slot it is label-attributed to, plus at most one `pose` and one `none` read while nothing better
+  exists. To count boxes: one per distinct `slot_code` among a code's `label` records; if it has
+  none, one for its best `pose` (else `none`) record. Boxes of one product side by side in one slot
+  count as one (`sim/evaluation/score.py` `boxes()` implements this).
 
 ## Draft fields (v1.0)
 

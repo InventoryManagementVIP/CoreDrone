@@ -30,10 +30,22 @@ def best_reads(records: list[dict]) -> dict[str, dict]:
     return best
 
 
+def boxes(records: list[dict]) -> dict[str, list[str | None]]:
+    """Boxes per code, counted as contracts/README.md says: one per label-attributed slot, else one."""
+    labelled: dict[str, set[str]] = {}
+    for r in records:
+        if r["attribution_method"] == "label":
+            labelled.setdefault(r["code"], set()).add(r["slot_code"])
+    best = best_reads(records)
+    return {code: sorted(labelled[code]) if code in labelled else [r.get("slot_code")] for code, r in best.items()}
+
+
 def score(ground_truth: dict, records: list[dict]) -> dict:
     truth: dict[str, str] = ground_truth["items"]  # item code -> slot code
     location_codes = {s["location_code"] for s in ground_truth["slots"]}
     reads = {code: r for code, r in best_reads(records).items() if code not in location_codes}
+    # Each code is one box in sim, so a code counted in more than one slot is an invented box.
+    extra = {code: slots for code, slots in boxes(records).items() if code in truth and len(slots) > 1}
     true_reads = sorted(c for c in reads if c in truth)
     false_reads = sorted(c for c in reads if c not in truth)
     correct = sorted(c for c in true_reads if reads[c].get("slot_code") == truth[c])
@@ -61,6 +73,8 @@ def score(ground_truth: dict, records: list[dict]) -> dict:
         "correct_slot": len(correct),
         "correct_slot_rate": len(correct) / n_true if n_true else 0.0,
         "attribution_methods": methods,
+        "extra_boxes": sum(len(slots) - 1 for slots in extra.values()),
+        "extra_box_slots": extra,
         "missed": sorted(set(truth) - set(true_reads)),
         "wrong_slot": wrong,
     }
@@ -75,7 +89,11 @@ def format_report(report: dict) -> str:
         f"  false reads        {r['false_reads']:6d}",
         f"  correct-slot rate  {r['correct_slot_rate']:6.1%}  ({r['correct_slot']}/{r['items_read']} read items)",
         f"  attribution        {methods}",
+        f"  extra boxes        {r['extra_boxes']:6d}",
     ]
+    if report["extra_box_slots"]:
+        lines.append("  counted in several slots:")
+        lines += [f"    {code}: {', '.join(slots)}" for code, slots in list(report["extra_box_slots"].items())[:20]]
     if report["wrong_slot"]:
         lines.append("  wrong slot:")
         lines += [

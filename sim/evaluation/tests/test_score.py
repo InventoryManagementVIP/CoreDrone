@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from evaluation.score import best_reads, format_report, load_records, score
+from evaluation.score import best_reads, boxes, format_report, load_records, score
 
 GT = {
     "warehouse_id": "test",
@@ -49,6 +49,20 @@ def test_metrics():
 def test_best_read_prefers_label_attribution():
     best = best_reads([rec("SKU-1", "S2", "pose"), rec("SKU-1", "S1", "label"), rec("SKU-1", None, "none")])
     assert best["SKU-1"]["slot_code"] == "S1"
+
+
+def test_boxes_count_label_slots_and_drop_weaker_reads():
+    records = [
+        rec("SKU-1", "S2", "pose"),
+        rec("SKU-1", "S1"),
+        rec("SKU-1", "S3"),
+        rec("SKU-2", None, "none"),
+        rec("SKU-2", "S2", "pose"),
+    ]
+    assert boxes(records) == {"SKU-1": ["S1", "S3"], "SKU-2": ["S2"]}
+    r = score(GT, records)
+    assert r["extra_boxes"] == 1 and r["extra_box_slots"] == {"SKU-1": ["S1", "S3"]}
+    assert "SKU-1: S1, S3" in format_report(r)
 
 
 def test_empty_run():
