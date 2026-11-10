@@ -78,9 +78,13 @@ changes parameters. Packages and what they own:
    `/flight/*` actions. The flight interface owns arm/mode/takeoff, a closed-loop go-to on our own
    localization, the velocity watchdog, the mission heartbeat watchdog, a box geofence from the
    warehouse layout, and pilot-override detection: if anyone else changes the mode (RC safety pilot,
-   GCS, FC failsafe), the stack stops commanding until the vehicle is disarmed.
+   GCS, FC failsafe), the stack stops commanding until the vehicle is disarmed. Land and abort latch:
+   nothing else runs until disarm or pilot override, and a landing that times out starts again. A
+   stale pose or external nav means zero velocity at once and a landing after 3 s; a mission that
+   ends FAILED or ABORTED in the air, or a silent safety monitor, also means a landing.
 4. **Safety monitor** (gap 5): battery, localization, FC link and corridor status → OK/WARN/ABORT;
-   ABORT calls `/flight/abort` (hold, then land). The RC safety pilot always wins.
+   ABORT calls `/flight/abort` (hold, then land) and resends it until `/flight/state` shows the
+   landing under way. A silent localization publisher counts as lost. The RC safety pilot always wins.
 5. **Time** (gap 6): sim uses `/clock` from Gazebo and `use_sim_time`. On the vehicle, chrony keeps
    the Jetson on UTC. The FC runs on its boot clock, so the flight interface converts external-nav
    stamps into it (docs/ardupilot.md, "External navigation timestamps").

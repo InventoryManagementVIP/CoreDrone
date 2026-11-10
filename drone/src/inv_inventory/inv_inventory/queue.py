@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS scans (
     record_json TEXT NOT NULL,
     synced_at   TEXT,
     attempts    INTEGER NOT NULL DEFAULT 0,
-    last_error  TEXT
+    last_error  TEXT,
+    rejected_at TEXT
 );
 CREATE INDEX IF NOT EXISTS scans_pending ON scans (synced_at, created_at);
 """
@@ -38,6 +39,9 @@ class ScanQueue:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=NORMAL")
         self._db.executescript(_SCHEMA)
+        # Databases from before rejected_at existed: run directories outlive a software update.
+        if "rejected_at" not in {row[1] for row in self._db.execute("PRAGMA table_info(scans)")}:
+            self._db.execute("ALTER TABLE scans ADD COLUMN rejected_at TEXT")
         self._db.commit()
 
     def close(self) -> None:
@@ -54,7 +58,8 @@ class ScanQueue:
 
     def pending(self, limit: int = 100) -> list[dict]:
         rows = self._db.execute(
-            "SELECT record_json FROM scans WHERE synced_at IS NULL ORDER BY created_at LIMIT ?", (limit,)
+            "SELECT record_json FROM scans WHERE synced_at IS NULL AND rejected_at IS NULL ORDER BY created_at LIMIT ?",
+            (limit,),
         ).fetchall()
         return [json.loads(r[0]) for r in rows]
 
@@ -72,6 +77,18 @@ class ScanQueue:
         )
         self._db.commit()
 
+    def mark_rejected(self, scan_ids: list[str], error: str) -> None:
+        """Take records that can never succeed out of the sync, so they cannot block the valid ones.
+
+        They stay in the table and in CSV exports.
+        """
+        now = _now()
+        self._db.executemany(
+            "UPDATE scans SET rejected_at = ?, attempts = attempts + 1, last_error = ? WHERE scan_id = ?",
+            [(now, error[:500], s) for s in scan_ids],
+        )
+        self._db.commit()
+
     def records(self, mission_id: str | None = None) -> list[dict]:
         if mission_id:
             rows = self._db.execute(
@@ -82,7 +99,12 @@ class ScanQueue:
         return [json.loads(r[0]) for r in rows]
 
     def counts(self) -> tuple[int, int]:
-        """(total, pending)."""
+        """(total, pending). Rejected records are not pending: they will never sync."""
         total = self._db.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
-        pending = self._db.execute("SELECT COUNT(*) FROM scans WHERE synced_at IS NULL").fetchone()[0]
+        pending = self._db.execute(
+            "SELECT COUNT(*) FROM scans WHERE synced_at IS NULL AND rejected_at IS NULL"
+        ).fetchone()[0]
         return total, pending
+
+    def rejected_count(self) -> int:
+        return self._db.execute("SELECT COUNT(*) FROM scans WHERE rejected_at IS NOT NULL").fetchone()[0]

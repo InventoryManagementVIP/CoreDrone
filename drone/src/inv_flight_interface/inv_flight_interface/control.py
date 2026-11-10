@@ -23,6 +23,14 @@ def rotate_xy(x: float, y: float, angle: float) -> tuple[float, float]:
     return (c * x - s * y, s * x + c * y)
 
 
+def all_finite(*values: float) -> bool:
+    return all(math.isfinite(v) for v in values)
+
+
+def is_unit_quaternion(x: float, y: float, z: float, w: float, tolerance: float = 0.05) -> bool:
+    return all_finite(x, y, z, w) and abs(math.sqrt(x * x + y * y + z * z + w * w) - 1.0) <= tolerance
+
+
 def yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
     return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
 
@@ -50,14 +58,24 @@ class Box:
     def contains(self, p: Vec3, margin: float = 0.0) -> bool:
         return all(self.lo[i] + margin <= p[i] <= self.hi[i] - margin for i in range(3))
 
-    def limit_velocity(self, p: Vec3, v: Vec3, margin: float) -> Vec3:
-        """Zero every velocity component that pushes the vehicle into a wall it is within `margin` of."""
+    def limit_velocity(self, p: Vec3, v: Vec3, margin: float, max_accel: float = 0.0) -> Vec3:
+        """Limit velocity towards each wall so the vehicle can stop `margin` short of it.
+
+        Within `margin` that component is zero. With `max_accel` > 0 it is also capped on the way
+        there to the speed that can still brake in the room left, sqrt(2 * a * room).
+        """
+
+        def stoppable(room: float) -> float:
+            if room <= 0.0:
+                return 0.0
+            return math.sqrt(2.0 * max_accel * room) if max_accel > 0.0 else math.inf
+
         out = list(v)
         for i in range(3):
-            if p[i] <= self.lo[i] + margin and out[i] < 0.0:
-                out[i] = 0.0
-            if p[i] >= self.hi[i] - margin and out[i] > 0.0:
-                out[i] = 0.0
+            if out[i] < 0.0:
+                out[i] = -min(-out[i], stoppable(p[i] - (self.lo[i] + margin)))
+            elif out[i] > 0.0:
+                out[i] = min(out[i], stoppable(self.hi[i] - margin - p[i]))
         return (out[0], out[1], out[2])
 
 

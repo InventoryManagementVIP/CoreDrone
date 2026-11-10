@@ -4,7 +4,16 @@ import pathlib
 import yaml
 
 from inv_safety.monitor import DEFAULTS
-from inv_safety.policy import ABORT, OK, WARN, Inputs, SafetyConfig, evaluate, should_request_abort
+from inv_safety.policy import (
+    ABORT,
+    OK,
+    WARN,
+    Inputs,
+    SafetyConfig,
+    evaluate,
+    should_request_abort,
+    should_resend_abort,
+)
 
 CFG = SafetyConfig()
 
@@ -32,8 +41,18 @@ def test_low_battery_warns_then_aborts():
     assert v.level == ABORT and "battery" in v.reasons[0]
 
 
-def test_unknown_battery_is_ignored():
-    assert evaluate(CFG, flying(battery_fraction=math.nan)).level == OK
+def test_unknown_battery_warns_only_while_flying():
+    v = evaluate(CFG, flying(battery_fraction=math.nan))
+    assert v.level == WARN and "battery" in v.reasons[0]
+    assert evaluate(CFG, flying(battery_fraction=math.nan, flying=False)).level == OK
+
+
+def test_abort_is_resent_until_seen_landing():
+    assert should_resend_abort(CFG, flying(), False, 1.0)
+    assert not should_resend_abort(CFG, flying(), False, 0.5)  # retry period
+    assert not should_resend_abort(CFG, flying(), True, 1.0)  # the flight interface is acting on it
+    assert not should_resend_abort(CFG, flying(armed=False), False, 1.0)
+    assert not should_resend_abort(CFG, flying(pilot_override=True), False, 1.0)  # the pilot always wins
 
 
 def test_localization_lost_needs_grace_period():

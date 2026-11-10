@@ -9,5 +9,6 @@ localization_adapter:
     publish_rate_hz: 30.0                       # external-nav rate to the EKF (AP wants >= 30 Hz)
     min_rate_hz: 15.0                           # below this the status is DEGRADED
     lost_timeout_s: 0.5                         # no fresh odometry for this long -> LOST
+    max_future_s: 0.1                           # odometry stamped further ahead than this -> LOST
     status_rate_hz: 5.0
     backend_status_timeout_s: 2.0

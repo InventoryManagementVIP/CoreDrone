@@ -70,11 +70,16 @@ class TestUplink(unittest.TestCase):
                 if pending and pending[-1] == "0":
                     break
             self.assertTrue(diags, "no /diagnostics")
-            future = client.call_async(ExportCsv.Request(path=os.path.join(TMP, "out.csv")))
+            outside = os.path.join(TMP, "outside.csv")
+            future = client.call_async(ExportCsv.Request(filename=outside))
+            rclpy.spin_until_future_complete(node, future, timeout_sec=10.0)
+            self.assertFalse(future.result().success)
+            self.assertFalse(os.path.exists(outside))
+            future = client.call_async(ExportCsv.Request(filename="out.csv"))
             rclpy.spin_until_future_complete(node, future, timeout_sec=10.0)
             self.assertTrue(future.result().success)
             self.assertEqual(future.result().count, 1)
-            self.assertTrue(os.path.exists(os.path.join(TMP, "out.csv")))
+            self.assertTrue(os.path.exists(os.path.join(TMP, "exports", "out.csv")))
             node.destroy_node()
         finally:
             rclpy.shutdown()

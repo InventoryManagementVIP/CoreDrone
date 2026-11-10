@@ -27,6 +27,7 @@ class Waypoint:
     pose: Pose  # base_link target in the map frame
     hover_s: float = 0.0
     slot_code: str = ""
+    speed_mps: float = 0.0  # 0: the flight interface's own limit
 
 
 def generate_route(
@@ -44,7 +45,7 @@ def generate_route(
             scan.transit_altitude_m,
             aisle.heading,
         )
-        route.append(Waypoint(f"{aisle.id}-entry", "transit", entry))
+        route.append(Waypoint(f"{aisle.id}-entry", "transit", entry, speed_mps=scan.speed_mps))
         for rack in aisle.racks:
             if not rack.scan or (include_racks is not None and rack.id not in include_racks):
                 continue
@@ -55,10 +56,12 @@ def generate_route(
                     bays.reverse()
                 for slot in bays:
                     body = body_pose_for_camera(camera_hover_pose(layout, slot), camera_offset_xyz)
-                    route.append(Waypoint(f"hp-{slot.code}", "scan", body, scan.hover_s, slot.code))
-        route.append(Waypoint(f"{aisle.id}-exit", "transit", Pose(entry.x, entry.y, entry.z, aisle.heading + math.pi)))
+                    route.append(Waypoint(f"hp-{slot.code}", "scan", body, scan.hover_s, slot.code, scan.speed_mps))
+        exit_pose = Pose(entry.x, entry.y, entry.z, aisle.heading + math.pi)
+        route.append(Waypoint(f"{aisle.id}-exit", "transit", exit_pose, speed_mps=scan.speed_mps))
     t = layout.takeoff
-    route.append(Waypoint("home", "transit", Pose(t.x, t.y, scan.transit_altitude_m, t.yaw)))
+    home = Pose(t.x, t.y, scan.transit_altitude_m, t.yaw)
+    route.append(Waypoint("home", "transit", home, speed_mps=scan.speed_mps))
     return route
 
 

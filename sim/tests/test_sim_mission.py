@@ -90,7 +90,9 @@ class TestScanMission(unittest.TestCase):
 
             client = node.create_client(ExportCsv, "/uplink/export_csv")
             self.assertTrue(client.wait_for_service(timeout_sec=10.0))
-            future = client.call_async(ExportCsv.Request(path=str(RUN_DIR / "scans.csv"), mission_id=final.mission_id))
+            future = client.call_async(
+                ExportCsv.Request(filename=f"{final.mission_id}.csv", mission_id=final.mission_id)
+            )
             rclpy.spin_until_future_complete(node, future, timeout_sec=30.0)
             self.assertTrue(future.result() and future.result().success, "CSV export failed")
 

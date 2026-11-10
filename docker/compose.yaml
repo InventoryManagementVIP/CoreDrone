@@ -42,7 +42,7 @@ services:
     <<: *dev
     command: sleep infinity
     ports:
-      - "8765:8765"   # foxglove_bridge (connect Foxglove to ws://localhost:8765)
+      - "127.0.0.1:8765:8765"   # foxglove_bridge (connect Foxglove to ws://localhost:8765); no auth, so local only
 
   sim:
     <<: *dev

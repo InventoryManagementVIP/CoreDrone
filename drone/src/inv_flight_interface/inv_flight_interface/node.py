@@ -15,6 +15,9 @@ Design:
   * After any goal the vehicle keeps holding its last target until the next command.
   * If someone else changes the mode (RC safety pilot, GCS, FC failsafe), the stack stops
     commanding immediately and reports pilot_override until the vehicle disarms.
+  * Land and abort latch: until the vehicle disarms or the pilot takes over, nothing else can run
+    and a landing that ends with the vehicle still armed is started again.
+  * Without a fresh pose and external nav the loop commands zero velocity, then lands.
 """
 
 from __future__ import annotations
@@ -42,7 +45,9 @@ from inv_flight_interface.control import (
     Gains,
     Limits,
     Setpoint,
+    all_finite,
     goto_setpoint,
+    is_unit_quaternion,
     rotate_xy,
     slew,
     wrap_angle,
@@ -50,11 +55,14 @@ from inv_flight_interface.control import (
 )
 from inv_flight_interface.copter_modes import mode_id, mode_name
 from inv_interfaces.action import GoTo, Hover, Land, Takeoff
-from inv_interfaces.msg import FlightState, MissionStatus
+from inv_interfaces.msg import FlightState, MissionStatus, SafetyStatus
 from inv_interfaces.srv import Abort
 
 GUIDED = mode_id("GUIDED")
 LAND = mode_id("LAND")
+RECOVERY_COMMANDS = ("land", "abort")
+MISSION_GAVE_UP = (MissionStatus.STATE_FAILED, MissionStatus.STATE_ABORTED)
+MAX_FUTURE_STAMP_S = 0.1  # clock skew tolerated on a transform before it counts as invalid
 
 # Parameter defaults. config/flight_interface.yaml must match (test/test_config.py checks it).
 DEFAULTS: dict[str, object] = {
@@ -65,6 +73,8 @@ DEFAULTS: dict[str, object] = {
     "odom_frame": "odom",
     "base_frame": "base_link",
     "link_timeout_s": 1.0,
+    "status_timeout_s": 2.0,
+    "battery_timeout_s": 3.0,
     "max_horizontal_speed_mps": 1.0,
     "max_vertical_speed_mps": 0.5,
     "max_yaw_rate_rad_s": 0.8,
@@ -89,9 +99,12 @@ DEFAULTS: dict[str, object] = {
     "cmd_vel_hold_s": 2.0,
     "mission_heartbeat_timeout_s": 0.0,
     "mission_lost_land_s": 30.0,
+    "safety_heartbeat_timeout_s": 0.0,
     "abort_hold_s": 2.0,
     "external_nav_timeout_s": 0.5,
     "require_external_nav": True,
+    "pose_timeout_s": 0.5,
+    "nav_lost_land_s": 3.0,
 }
 
 
@@ -152,22 +165,8 @@ class FlightInterfaceNode(Node):
         )
         self.gains = Gains(xy=self.p["gain_xy"], z=self.p["gain_z"], yaw=self.p["gain_yaw"])
         self.fence = Box(tuple(self.p["geofence_min_xyz"]), tuple(self.p["geofence_max_xyz"]))
-
-        # Shared state, guarded by self._lock.
-        self._cmd: Command | None = None
-        self._hold: Pose | None = None
-        self._takeoff_floor_z: float | None = None
-        self._pilot_override = False
-        self._in_control = False
-        self._was_armed = False
-        self._last_setpoint = Setpoint()
-        self._last_tick_s: float | None = None
-        self._last_external_nav_s: float | None = None
-        self._last_odom_yaw: float | None = None
-        self._last_mission_status_s: float | None = None
-        self._mission_warned = False
-        self._last_cmd_vel: TwistStamped | None = None
-        self._last_cmd_vel_s: float | None = None
+        self.ceiling = Box((-math.inf, -math.inf, -math.inf), (math.inf, math.inf, self.p["max_altitude_m"]))
+        self._init_state()
 
         self._state_pub = self.create_publisher(FlightState, "/flight/state", 10)
         self.create_subscription(
@@ -180,28 +179,50 @@ class FlightInterfaceNode(Node):
         self.create_subscription(
             MissionStatus, "/mission/status", self._on_mission_status, 10, callback_group=self._cb_io
         )
+        self.create_subscription(SafetyStatus, "/safety/status", self._on_safety_status, 10, callback_group=self._cb_io)
         self.create_subscription(TwistStamped, "/flight/cmd_vel", self._on_cmd_vel, 10, callback_group=self._cb_io)
 
-        def server(action_type, name, execute, goal_cb):
+        def server(action_type, name, execute, goal_cb, cancel=CancelResponse.ACCEPT):
             return ActionServer(
                 self,
                 action_type,
                 name,
                 execute_callback=execute,
                 goal_callback=goal_cb,
-                cancel_callback=lambda _goal: CancelResponse.ACCEPT,
+                cancel_callback=lambda _goal: cancel,
                 callback_group=self._cb_actions,
             )
 
         self._servers = [
             server(Takeoff, "/flight/takeoff", self._exec_takeoff, self._goal_takeoff),
             server(GoTo, "/flight/goto", self._exec_goto, self._goal_goto),
-            server(Hover, "/flight/hover", self._exec_hover, self._goal_flying),
-            server(Land, "/flight/land", self._exec_land, lambda _g: GoalResponse.ACCEPT),
+            server(Hover, "/flight/hover", self._exec_hover, self._goal_hover),
+            # A landing cannot be canceled: the mission tree cancels its goals when it stops.
+            server(Land, "/flight/land", self._exec_land, lambda _g: GoalResponse.ACCEPT, CancelResponse.REJECT),
         ]
         self.create_service(Abort, "/flight/abort", self._on_abort, callback_group=self._cb_actions)
         self.create_timer(1.0 / self.p["control_rate_hz"], self._tick, callback_group=self._cb_control)
         self.get_logger().info(f"flight interface up (backend={self.backend.name})")
+
+    def _init_state(self) -> None:
+        # Shared state, guarded by self._lock.
+        self._cmd: Command | None = None
+        self._hold: Pose | None = None
+        self._takeoff_floor_z: float | None = None
+        self._pilot_override = False
+        self._recovering = False  # land/abort latched until disarm or pilot override
+        self._in_control = False
+        self._was_armed = False
+        self._last_setpoint = Setpoint()
+        self._last_tick_s: float | None = None
+        self._last_external_nav_s: float | None = None
+        self._last_odom_yaw: float | None = None
+        self._last_mission_status_s: float | None = None
+        self._last_safety_status_s: float | None = None
+        self._nav_lost_since_s: float | None = None
+        self._mission_warned = False
+        self._last_cmd_vel: TwistStamped | None = None
+        self._last_cmd_vel_s: float | None = None
 
     # ---- helpers -----------------------------------------------------------------------------
     def _now(self) -> float:
@@ -217,7 +238,12 @@ class FlightInterfaceNode(Node):
         t = self._lookup(self.p["map_frame"], self.p["base_frame"])
         if t is None:
             return None
+        age = self._now() - (t.header.stamp.sec + t.header.stamp.nanosec * 1e-9)
+        if not -MAX_FUTURE_STAMP_S <= age <= self.p["pose_timeout_s"]:
+            return None
         q, p = t.transform.rotation, t.transform.translation
+        if not all_finite(p.x, p.y, p.z, q.x, q.y, q.z, q.w):
+            return None
         return Pose(p.x, p.y, p.z, yaw_from_quaternion(q.x, q.y, q.z, q.w))
 
     def _map_to_odom_yaw(self) -> float:
@@ -228,12 +254,28 @@ class FlightInterfaceNode(Node):
         return yaw_from_quaternion(q.x, q.y, q.z, q.w)
 
     def _connected(self, st: FcState, now: float) -> bool:
-        return st.last_message_s is not None and now - st.last_message_s < self.p["link_timeout_s"]
+        # /ap/time arrives at 100 Hz and would hide a stale armed/mode/failsafe status on its own.
+        return (
+            st.last_message_s is not None
+            and now - st.last_message_s < self.p["link_timeout_s"]
+            and st.last_status_s is not None
+            and now - st.last_status_s < self.p["status_timeout_s"]
+        )
 
     def _external_nav_ok(self, now: float) -> bool:
         return (
             self._last_external_nav_s is not None and now - self._last_external_nav_s < self.p["external_nav_timeout_s"]
         )
+
+    def _nav_ok(self, pose: Pose | None, now: float) -> bool:
+        return pose is not None and (not self.p["require_external_nav"] or self._external_nav_ok(now))
+
+    def _land_if_flying(self, reason: str) -> None:
+        """Latch a landing unless one is running or the pilot has control. Caller holds the lock."""
+        st = self.backend.state()
+        if st.armed and st.flying and not self._pilot_override and not self._recovering:
+            self.get_logger().error(f"{reason}: landing")
+            self._start(Command("land"))
 
     # ---- inputs -------------------------------------------------------------------------------
     def _on_external_nav(self, msg: Odometry) -> None:
@@ -244,15 +286,30 @@ class FlightInterfaceNode(Node):
             if sent:
                 self._last_external_nav_s = self._now()
 
-    def _on_mission_status(self, _msg: MissionStatus) -> None:
+    def _on_mission_status(self, msg: MissionStatus) -> None:
         with self._lock:
             self._last_mission_status_s = self._now()
             self._mission_warned = False
+            if msg.state in MISSION_GAVE_UP:
+                self._land_if_flying(f"mission ended in the air ({msg.message or 'no reason given'})")
+
+    def _on_safety_status(self, _msg: SafetyStatus) -> None:
+        with self._lock:
+            self._last_safety_status_s = self._now()
 
     def _on_cmd_vel(self, msg: TwistStamped) -> None:
+        t = msg.twist
+        if not all_finite(t.linear.x, t.linear.y, t.linear.z, t.angular.z):
+            self.get_logger().warning("/flight/cmd_vel dropped: non-finite value", throttle_duration_sec=5.0)
+            return
+        if msg.header.frame_id not in ("", self.p["map_frame"], self.p["base_frame"]):
+            self.get_logger().warning(
+                f"/flight/cmd_vel dropped: frame {msg.header.frame_id!r} is not supported", throttle_duration_sec=5.0
+            )
+            return
         with self._lock:
             st = self.backend.state()
-            if self._pilot_override or not (st.armed and st.flying):
+            if self._pilot_override or self._recovering or not (st.armed and st.flying):
                 return
             self._last_cmd_vel = msg
             self._last_cmd_vel_s = self._now()
@@ -263,7 +320,15 @@ class FlightInterfaceNode(Node):
 
     # ---- command lifecycle ----------------------------------------------------------------------
     def _start(self, cmd: Command) -> None:
-        """Make `cmd` the active command, preempting the current one. Caller holds the lock."""
+        """Make `cmd` the active command, preempting the current one. Caller holds the lock.
+
+        This is the one place commands are admitted, so the recovery latch cannot be bypassed.
+        """
+        if self._recovering and cmd.kind not in RECOVERY_COMMANDS:
+            self._finish(cmd, False, "rejected: landing in progress")
+            return
+        if cmd.kind in RECOVERY_COMMANDS and self.backend.state().armed:
+            self._recovering = True
         now = self._now()
         if self._cmd is not None and not self._cmd.done.is_set():
             self._finish(self._cmd, False, f"preempted by {cmd.kind}")
@@ -295,7 +360,7 @@ class FlightInterfaceNode(Node):
     # ---- actions --------------------------------------------------------------------------------
     def _goal_takeoff(self, goal) -> GoalResponse:
         st = self.backend.state()
-        if self._pilot_override or (st.armed and st.flying):
+        if self._pilot_override or self._recovering or (st.armed and st.flying):
             return GoalResponse.REJECT
         if not 0.3 <= goal.altitude_m <= self.p["max_altitude_m"]:
             return GoalResponse.REJECT
@@ -303,16 +368,30 @@ class FlightInterfaceNode(Node):
 
     def _goal_flying(self, _goal) -> GoalResponse:
         st = self.backend.state()
-        return GoalResponse.ACCEPT if st.armed and st.flying and not self._pilot_override else GoalResponse.REJECT
+        ok = st.armed and st.flying and not self._pilot_override and not self._recovering
+        return GoalResponse.ACCEPT if ok else GoalResponse.REJECT
+
+    def _goal_hover(self, goal) -> GoalResponse:
+        if not (all_finite(goal.duration_s) and goal.duration_s >= 0.0):
+            return GoalResponse.REJECT
+        return self._goal_flying(goal)
 
     def _goal_goto(self, goal) -> GoalResponse:
         if self._goal_flying(goal) != GoalResponse.ACCEPT:
+            return GoalResponse.REJECT
+        p, q = goal.target.pose.position, goal.target.pose.orientation
+        options = (goal.max_speed_mps, goal.position_tolerance_m, goal.yaw_tolerance_rad)
+        if not (
+            all_finite(p.x, p.y, p.z, *options)
+            and min(options) >= 0.0  # 0 selects the default
+            and is_unit_quaternion(q.x, q.y, q.z, q.w)
+        ):
+            self.get_logger().warning("goto rejected: non-finite, negative or non-unit values in the goal")
             return GoalResponse.REJECT
         frame = goal.target.header.frame_id or self.p["map_frame"]
         if frame != self.p["map_frame"]:
             self.get_logger().warning(f"goto rejected: target frame {frame!r} is not {self.p['map_frame']!r}")
             return GoalResponse.REJECT
-        p = goal.target.pose.position
         if self.p["geofence_enabled"] and not self.fence.contains((p.x, p.y, p.z), self.p["geofence_margin_m"]):
             self.get_logger().warning(f"goto rejected: ({p.x:.2f}, {p.y:.2f}, {p.z:.2f}) is outside the geofence")
             return GoalResponse.REJECT
@@ -412,8 +491,8 @@ class FlightInterfaceNode(Node):
                 response.accepted, response.message = False, "pilot has control"
                 return response
             self.get_logger().warning(f"ABORT requested: {request.reason or 'no reason given'}")
-            if self._cmd is not None and self._cmd.kind in ("land", "abort"):
-                response.accepted, response.message = True, f"already {self._cmd.kind}ing"
+            if self._recovering:
+                response.accepted, response.message = True, "already landing"
                 return response
             self._start(Command("abort", {"reason": request.reason}))
         response.accepted, response.message = True, "holding, then landing"
@@ -430,7 +509,11 @@ class FlightInterfaceNode(Node):
             self._last_tick_s = now
             self._learn_alignment(st, now)
             self._check_pilot_override(st)
+            if not st.armed:
+                self._recovering = False
             self._watchdogs(st, pose, now)
+            if self._recovering and self._cmd is None and st.armed and not self._pilot_override:
+                self._start(Command("land"))  # the last attempt timed out: try again
 
             setpoint: Setpoint | None = None
             cmd = self._cmd
@@ -444,18 +527,16 @@ class FlightInterfaceNode(Node):
                 self._in_control = self._cmd is not None
             self._was_armed = st.armed
 
-            can_command = (
-                setpoint is not None
-                and connected
-                and st.mode_id == GUIDED
-                and not self._pilot_override
-                and self.alignment.ready
-                and pose is not None
-            )
-            if can_command:
+            may_command = connected and st.mode_id == GUIDED and not self._pilot_override
+            nav_ok = self._nav_ok(pose, now)
+            if may_command and setpoint is not None and self.alignment.ready and nav_ok:
                 self._send(setpoint, pose, dt)
             else:
                 self._last_setpoint = Setpoint()
+                taking_off = self._cmd is not None and self._cmd.kind == "takeoff"
+                if may_command and not nav_ok and self._in_control and st.flying and not taking_off:
+                    # The FC would otherwise keep flying the last setpoint until GUID_TIMEOUT.
+                    self.backend.send_velocity(0.0, 0.0, 0.0, 0.0)
             self._publish_state(st, connected, now)
 
     def _learn_alignment(self, st: FcState, now: float) -> None:
@@ -491,21 +572,34 @@ class FlightInterfaceNode(Node):
                     "stopping all commands until disarmed"
                 )
             self._pilot_override = True
+            self._recovering = False
             if self._cmd is not None:
                 self._finish(self._cmd, False, f"pilot override ({mode_name(st.mode_id)})")
             self._hold = None
 
     def _watchdogs(self, st: FcState, pose: Pose | None, now: float) -> None:
         if not (st.armed and st.flying) or self._pilot_override:
+            self._nav_lost_since_s = None
             return
+        # Localization: _tick already commands zero velocity. Land if it does not come back.
+        if self._nav_ok(pose, now):
+            self._nav_lost_since_s = None
+        elif self._nav_lost_since_s is None:
+            self._nav_lost_since_s = now
+        elif now - self._nav_lost_since_s > self.p["nav_lost_land_s"]:
+            self._land_if_flying(f"no fresh pose or external nav for {now - self._nav_lost_since_s:.1f} s")
+        # Safety monitor: without it nothing watches battery or localization health.
+        safety_timeout = self.p["safety_heartbeat_timeout_s"]
+        if safety_timeout > 0.0 and self._last_safety_status_s is not None:
+            age = now - self._last_safety_status_s
+            if age > safety_timeout:
+                self._land_if_flying(f"no safety status for {age:.1f} s")
         # Mission heartbeat: hold, then land if the mission node disappears mid-flight.
         timeout = self.p["mission_heartbeat_timeout_s"]
         if timeout > 0.0 and self._last_mission_status_s is not None:
             age = now - self._last_mission_status_s
-            landing = self._cmd is not None and self._cmd.kind in ("land", "abort")
-            if age > self.p["mission_lost_land_s"] and not landing:
-                self.get_logger().error(f"no mission heartbeat for {age:.0f} s: landing")
-                self._start(Command("land"))
+            if age > self.p["mission_lost_land_s"]:
+                self._land_if_flying(f"no mission heartbeat for {age:.0f} s")
             elif age > timeout and not self._mission_warned:
                 self._mission_warned = True
                 self.get_logger().warning(f"no mission heartbeat for {age:.1f} s: holding position")
@@ -647,22 +741,29 @@ class FlightInterfaceNode(Node):
 
     # ---- output -----------------------------------------------------------------------------
     def _send(self, setpoint: Setpoint, pose: Pose, dt: float) -> None:
-        # Limits: speeds, geofence, ceiling, then acceleration.
+        if not all_finite(setpoint.vx, setpoint.vy, setpoint.vz, setpoint.yaw_rate):
+            self.get_logger().error(f"non-finite setpoint {setpoint}: stopping", throttle_duration_sec=1.0)
+            setpoint = Setpoint()
+        # Limits: speeds, then boundaries, then acceleration. Boundaries apply again last because the
+        # slew ramps down from the previous setpoint and would put back velocity they removed.
         sp = Setpoint(
             *self._limit_speeds(setpoint.vx, setpoint.vy, setpoint.vz),
             max(-self.limits.max_yaw_rate, min(self.limits.max_yaw_rate, setpoint.yaw_rate)),
         )
-        if self.p["geofence_enabled"]:
-            vx, vy, vz = self.fence.limit_velocity(pose.xyz, (sp.vx, sp.vy, sp.vz), self.p["geofence_margin_m"])
-            sp = Setpoint(vx, vy, vz, sp.yaw_rate)
-        if pose.z >= self.p["max_altitude_m"] and sp.vz > 0.0:
-            sp = Setpoint(sp.vx, sp.vy, 0.0, sp.yaw_rate)
-        sp = slew(self._last_setpoint, sp, self.limits.max_accel, dt)
+        sp = self._limit_to_boundaries(sp, pose)
+        sp = self._limit_to_boundaries(slew(self._last_setpoint, sp, self.limits.max_accel, dt), pose)
         self._last_setpoint = sp
         # map -> odom -> FC map frame (see FrameAlignment).
         ox, oy = rotate_xy(sp.vx, sp.vy, -self._map_to_odom_yaw())
         fx, fy = rotate_xy(ox, oy, self.alignment.rotation)
         self.backend.send_velocity(fx, fy, sp.vz, sp.yaw_rate)
+
+    def _limit_to_boundaries(self, sp: Setpoint, pose: Pose) -> Setpoint:
+        v = (sp.vx, sp.vy, sp.vz)
+        if self.p["geofence_enabled"]:
+            v = self.fence.limit_velocity(pose.xyz, v, self.p["geofence_margin_m"], self.limits.max_accel)
+        v = self.ceiling.limit_velocity(pose.xyz, v, 0.0, self.limits.max_accel)
+        return Setpoint(*v, sp.yaw_rate)
 
     def _limit_speeds(self, vx: float, vy: float, vz: float) -> tuple[float, float, float]:
         h = math.hypot(vx, vy)
@@ -683,8 +784,9 @@ class FlightInterfaceNode(Node):
         msg.pilot_override = self._pilot_override
         msg.ekf_origin_set = st.ekf_origin_set
         msg.external_nav_ok = self._external_nav_ok(now)
-        msg.battery_voltage = float(st.battery_voltage)
-        msg.battery_percentage = float(st.battery_percentage)
+        battery_fresh = st.last_battery_s is not None and now - st.last_battery_s < self.p["battery_timeout_s"]
+        msg.battery_voltage = float(st.battery_voltage) if battery_fresh else math.nan
+        msg.battery_percentage = float(st.battery_percentage) if battery_fresh else math.nan
         if self._cmd is not None:
             msg.active_command = self._cmd.kind
         elif self._hold is not None and st.armed:

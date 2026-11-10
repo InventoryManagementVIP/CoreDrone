@@ -11,7 +11,7 @@ from rclpy.node import Node
 
 from inv_interfaces.msg import CorridorStatus, FlightState, LocalizationStatus, SafetyStatus
 from inv_interfaces.srv import Abort
-from inv_safety.policy import Inputs, SafetyConfig, evaluate, should_request_abort
+from inv_safety.policy import Inputs, SafetyConfig, evaluate, should_request_abort, should_resend_abort
 
 DEFAULTS: dict[str, object] = {
     "battery_warn_fraction": 0.30,
@@ -19,6 +19,8 @@ DEFAULTS: dict[str, object] = {
     "localization_lost_grace_s": 1.0,
     "fc_link_grace_s": 2.0,
     "state_stale_s": 2.0,
+    "localization_stale_s": 1.0,
+    "abort_retry_s": 1.0,
     "rate_hz": 5.0,
 }
 
@@ -35,14 +37,20 @@ class SafetyMonitor(Node):
             localization_lost_grace_s=p["localization_lost_grace_s"],
             fc_link_grace_s=p["fc_link_grace_s"],
             state_stale_s=p["state_stale_s"],
+            localization_stale_s=p["localization_stale_s"],
+            abort_retry_s=p["abort_retry_s"],
         )
         self._flight: FlightState | None = None
         self._flight_s: float | None = None
         self._loc: LocalizationStatus | None = None
+        self._loc_s: float | None = None
         self._loc_lost_since: float | None = None
         self._link_lost_since: float | None = None
         self._corridor: CorridorStatus | None = None
-        self._abort_requested = False
+        self._abort_requested = False  # latched until disarm: the stack has given up on this flight
+        self._abort_reason = ""
+        self._abort_future = None
+        self._last_abort_attempt_s = -math.inf
         self._last_level = 0
 
         self.create_subscription(FlightState, "/flight/state", self._on_flight, 10)
@@ -64,9 +72,10 @@ class SafetyMonitor(Node):
             self._link_lost_since = now
         if not msg.armed:
             self._abort_requested = False
+            self._last_abort_attempt_s = -math.inf
 
     def _on_loc(self, msg: LocalizationStatus) -> None:
-        self._loc = msg
+        self._loc, self._loc_s = msg, self._now()
         if msg.state == LocalizationStatus.STATE_LOST:
             if self._loc_lost_since is None:
                 self._loc_lost_since = self._now()
@@ -80,6 +89,9 @@ class SafetyMonitor(Node):
         now = self._now()
         if self._loc is None and self._loc_lost_since is None:
             self._loc_lost_since = now  # no localization status yet: count it as lost from now on
+        silent = self._loc_s is not None and now - self._loc_s > self.cfg.localization_stale_s
+        if silent and self._loc_lost_since is None:
+            self._loc_lost_since = now  # its publisher went silent: the last TRACKING means nothing now
         f = self._flight
         x = Inputs(
             now_s=now,
@@ -96,7 +108,13 @@ class SafetyMonitor(Node):
         )
         verdict = evaluate(self.cfg, x)
         if should_request_abort(verdict, x, self._abort_requested):
-            self._request_abort("; ".join(verdict.reasons))
+            self._abort_requested, self._abort_reason = True, "; ".join(verdict.reasons)
+        if self._abort_requested:
+            state_fresh = x.flight_state_age_s <= self.cfg.state_stale_s
+            landing = state_fresh and bool(f) and f.active_command in ("land", "abort")
+            if should_resend_abort(self.cfg, x, landing, now - self._last_abort_attempt_s):
+                self._last_abort_attempt_s = now
+                self._request_abort(self._abort_reason)
         msg = SafetyStatus()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.level = verdict.level
@@ -118,8 +136,17 @@ class SafetyMonitor(Node):
             self.get_logger().error(f"want to abort ({reason}) but /flight/abort is not available")
             return
         self.get_logger().error(f"requesting abort: {reason}")
-        self._abort_requested = True
-        self.abort_client.call_async(Abort.Request(reason=f"safety: {reason}"))
+        if self._abort_future is not None and not self._abort_future.done():
+            self.abort_client.remove_pending_request(self._abort_future)
+        self._abort_future = self.abort_client.call_async(Abort.Request(reason=f"safety: {reason}"))
+        self._abort_future.add_done_callback(self._on_abort_response)
+
+    def _on_abort_response(self, future) -> None:
+        if future.cancelled():
+            return
+        response = future.result()
+        if response is not None and not response.accepted:
+            self.get_logger().error(f"abort rejected: {response.message}")
 
 
 def main(args=None) -> None:

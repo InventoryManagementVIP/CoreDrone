@@ -11,8 +11,12 @@
   with_platform:=true         false = autonomy stack only (platform started separately, e.g. systemd)
   run_dir:=                   where the inventory DB and CSV exports go (default: $INV_ROOT/runs/latest)
   sim only:  sensors:=label|none|full   headless:=true|false   speedup:=1
-  foxglove:=false             start foxglove_bridge on port 8765
-  params_file:=               extra node parameter overrides (YAML, keyed by node name)
+  foxglove:=false             start foxglove_bridge on port 8765 (loopback only on the vehicle)
+  params_file:=               extra overrides (YAML, keyed by node name) for the nodes started in this
+                              file; localization, mapping and perception take their own
+
+Parameters layer as: package defaults, platform overrides, values computed here, params_file.
+Later files win, so a package's defaults must come first.
 
 Only the platform differs between sim and real; if you find yourself adding a node here that
 only exists for one platform, it belongs in sim/launch or real/launch instead.
@@ -70,8 +74,10 @@ def _launch(context, *args, **kwargs):
     platform_params = _share("inv_bringup", "config", f"{platform}.yaml")
     user_params = arg("params_file")
 
-    def params(*layers):
-        out = [platform_params, *layers]
+    def params(package_defaults, computed=None):
+        out = [package_defaults, platform_params]
+        if computed:
+            out.append(computed)
         if user_params:
             out.append(user_params)
         return [*out, {"use_sim_time": use_sim_time}]
@@ -132,6 +138,8 @@ def _launch(context, *args, **kwargs):
                     "geofence_max_xyz": [float(v) for v in hi],
                     # Hold and then land if the mission node dies mid-flight.
                     "mission_heartbeat_timeout_s": 5.0 if mission != "none" else 0.0,
+                    # The safety monitor is always part of this stack: land if it dies.
+                    "safety_heartbeat_timeout_s": 3.0,
                 },
             ),
         ),
@@ -187,7 +195,9 @@ def _launch(context, *args, **kwargs):
                 executable="foxglove_bridge",
                 name="foxglove_bridge",
                 output="log",
-                parameters=[{"port": 8765, "address": "0.0.0.0", "use_sim_time": use_sim_time}],
+                # Sim: inside the container, which publishes the port to the host's loopback only
+                # (docker/compose.yaml). The vehicle uses host networking: reach it over an SSH tunnel.
+                parameters=[{"port": 8765, "address": "0.0.0.0" if sim else "127.0.0.1", "use_sim_time": use_sim_time}],
             )
         )
     return actions

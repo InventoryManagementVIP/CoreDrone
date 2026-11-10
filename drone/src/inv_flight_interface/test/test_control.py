@@ -8,7 +8,9 @@ from inv_flight_interface.control import (
     Gains,
     Limits,
     Setpoint,
+    all_finite,
     goto_setpoint,
+    is_unit_quaternion,
     rotate_xy,
     slew,
     wrap_angle,
@@ -66,6 +68,42 @@ def test_box_blocks_outward_velocity_only():
     assert box.limit_velocity((5, 5, 2.9), (0, 0, 0.5), margin=0.3) == (0.0, 0.0, 0.0)
     assert box.contains((5, 5, 1), margin=0.3)
     assert not box.contains((5, 5, 2.9), margin=0.3)
+
+
+def test_box_caps_speed_to_what_can_still_brake():
+    box = Box((0, 0, 0), (10, 10, 3))
+    # 0.5 m of room at 1 m/s^2 allows sqrt(2 * 1 * 0.5) = 1 m/s.
+    vx, _, _ = box.limit_velocity((9.2, 5, 1), (2.0, 0.0, 0.0), margin=0.3, max_accel=1.0)
+    assert vx == pytest.approx(1.0)
+    vx, _, _ = box.limit_velocity((0.8, 5, 1), (-2.0, 0.0, 0.0), margin=0.3, max_accel=1.0)
+    assert vx == pytest.approx(-1.0)
+    # Slower than the cap, or moving away: untouched.
+    assert box.limit_velocity((9.2, 5, 1), (0.5, 0.0, 0.0), margin=0.3, max_accel=1.0)[0] == 0.5
+    assert box.limit_velocity((9.2, 5, 1), (-2.0, 0.0, 0.0), margin=0.3, max_accel=1.0)[0] == -2.0
+
+
+def test_box_braking_curve_stops_before_the_margin():
+    box, a, margin, x, v, dt = Box((0, 0, 0), (10, 10, 3)), 1.5, 0.3, 5.0, 1.0, 0.05
+    for _ in range(2000):
+        v = box.limit_velocity((x, 5, 1), (1.0, 0.0, 0.0), margin, a)[0]
+        x += v * dt
+    # A discrete loop can pass the line by what it travels in one tick; the margin absorbs that.
+    assert v == 0.0 and x <= 10.0 - margin + 0.01
+
+
+def test_all_finite():
+    assert all_finite(0.0, -1.5, 1e9)
+    assert all_finite()
+    for bad in (math.nan, math.inf, -math.inf):
+        assert not all_finite(0.0, bad)
+
+
+def test_is_unit_quaternion():
+    assert is_unit_quaternion(0.0, 0.0, 0.0, 1.0)
+    assert is_unit_quaternion(0.0, 0.0, math.sin(0.3), math.cos(0.3))
+    assert not is_unit_quaternion(0.0, 0.0, 0.0, 0.0)
+    assert not is_unit_quaternion(0.0, 0.0, 0.0, 2.0)
+    assert not is_unit_quaternion(0.0, 0.0, 0.0, math.nan)
 
 
 def test_rotate_xy():

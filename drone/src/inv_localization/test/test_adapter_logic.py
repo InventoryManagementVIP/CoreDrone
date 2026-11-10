@@ -21,6 +21,8 @@ def test_classify():
     assert classify(math.inf, 0.0, None, 0.5, 15.0) == LOST
     assert classify(0.05, 30.0, LOST, 0.5, 15.0) == LOST  # backend says it lost tracking
     assert classify(0.05, 30.0, DEGRADED, 0.5, 15.0) == DEGRADED
+    assert classify(-0.05, 30.0, None, 0.5, 15.0) == TRACKING  # small clock skew
+    assert classify(-100.0, 30.0, None, 0.5, 15.0) == LOST  # stamped in the future
 
 
 def _params(name, node):

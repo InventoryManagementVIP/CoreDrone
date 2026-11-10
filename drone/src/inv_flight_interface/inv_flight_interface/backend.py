@@ -19,7 +19,9 @@ from nav_msgs.msg import Odometry
 class FcState:
     """What the backend currently knows about the flight controller."""
 
-    last_message_s: float | None = None  # ROS time of the latest FC message
+    last_message_s: float | None = None  # ROS time of the latest FC message of any kind
+    last_status_s: float | None = None  # ... of the one carrying armed/flying/mode/failsafes
+    last_battery_s: float | None = None
     armed: bool = False
     flying: bool = False
     mode_id: int | None = None

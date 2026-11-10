@@ -33,9 +33,9 @@ the autonomy code. Message definitions live in `drone/src/inv_interfaces`.
 | `/flight/takeoff` | action | `inv_interfaces/Takeoff` | GUIDED, arm, take off, climb; waits for FC link, EKF origin, external nav, frame alignment |
 | `/flight/goto` | action | `inv_interfaces/GoTo` | target in `map`; position + yaw; keeps holding the target afterwards |
 | `/flight/hover` | action | `inv_interfaces/Hover` | hold position for `duration_s` |
-| `/flight/land` | action | `inv_interfaces/Land` | LAND mode; succeeds when disarmed |
-| `/flight/abort` | service | `inv_interfaces/Abort` | hold 2 s, then land |
-| `/uplink/export_csv` | service | `inv_interfaces/ExportCsv` | CSV of queued scan records |
+| `/flight/land` | action | `inv_interfaces/Land` | LAND mode; succeeds when disarmed; cannot be canceled |
+| `/flight/abort` | service | `inv_interfaces/Abort` | hold 2 s, then land; other commands are refused until disarm or pilot override |
+| `/uplink/export_csv` | service | `inv_interfaces/ExportCsv` | CSV of queued scan records; a new file in the export directory, named by a plain `.csv` file name. Cells that a spreadsheet would run as a formula start with `'` |
 
 **Rule:** only `inv_flight_interface` names ArduPilot's `/ap/*` interfaces. CI enforces it
 (`drone/src/inv_flight_interface/test/test_ap_topics_confined.py`). Platform code in `sim/` and

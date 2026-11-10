@@ -6,6 +6,7 @@ Phase 1 policy (docs/architecture.md, "Safety"):
   * flight-controller link lost                            -> ABORT (the FC's own failsafes act too)
   * flight state stale (flight interface not running)      -> ABORT while flying
   * corridor blocked                                       -> WARN (the mission holds; no abort)
+  * battery level unknown while flying                     -> WARN (the FC's battery failsafe still acts)
 The RC safety pilot always wins: during pilot override nothing is requested.
 TODO(phase-2): smarter policies (battery vs distance home, repeated degraded tracking, geofence margin).
 """
@@ -25,6 +26,8 @@ class SafetyConfig:
     localization_lost_grace_s: float = 1.0
     fc_link_grace_s: float = 2.0
     state_stale_s: float = 2.0
+    localization_stale_s: float = 1.0
+    abort_retry_s: float = 1.0
 
 
 @dataclass
@@ -59,7 +62,10 @@ def evaluate(cfg: SafetyConfig, x: Inputs) -> Verdict:
         return v
     if x.fc_link_lost_since_s is not None and x.now_s - x.fc_link_lost_since_s > cfg.fc_link_grace_s:
         v.raise_to(ABORT if x.armed else WARN, "flight controller link lost")
-    if not math.isnan(x.battery_fraction):
+    if math.isnan(x.battery_fraction):
+        if x.flying:
+            v.raise_to(WARN, "battery level unknown")
+    else:
         if x.battery_fraction < cfg.battery_abort_fraction:
             v.raise_to(ABORT, f"battery {x.battery_fraction:.0%} < {cfg.battery_abort_fraction:.0%}")
         elif x.battery_fraction < cfg.battery_warn_fraction:
@@ -77,3 +83,8 @@ def evaluate(cfg: SafetyConfig, x: Inputs) -> Verdict:
 
 def should_request_abort(verdict: Verdict, x: Inputs, already_requested: bool) -> bool:
     return verdict.level == ABORT and x.armed and x.flying and not x.pilot_override and not already_requested
+
+
+def should_resend_abort(cfg: SafetyConfig, x: Inputs, landing_observed: bool, since_last_attempt_s: float) -> bool:
+    """A request only counts once the flight interface is seen acting on it: resend until then."""
+    return x.armed and not x.pilot_override and not landing_observed and since_last_attempt_s >= cfg.abort_retry_s

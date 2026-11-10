@@ -6,4 +6,6 @@ safety_monitor:
     localization_lost_grace_s: 1.0     # LOST for longer than this while flying -> abort
     fc_link_grace_s: 2.0
     state_stale_s: 2.0                 # /flight/state older than this -> flight interface is down
+    localization_stale_s: 1.0          # /localization/status older than this counts as LOST
+    abort_retry_s: 1.0                 # resend the abort until /flight/state shows it being acted on
     rate_hz: 5.0

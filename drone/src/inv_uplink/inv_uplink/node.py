@@ -18,7 +18,7 @@ from rclpy.node import Node
 from inv_interfaces.srv import ExportCsv
 from inv_inventory.queue import ScanQueue
 from inv_uplink.backends import BackendError, make_backend
-from inv_uplink.export import contract_errors, export_csv
+from inv_uplink.export import contract_errors, export_csv, resolve_export_path, safe_name_part
 
 DEFAULTS: dict[str, object] = {
     "db_path": "/tmp/coredrone/inventory.sqlite",
@@ -61,8 +61,10 @@ class UplinkNode(Node):
             if bad:
                 for scan_id, errs in bad.items():
                     self.get_logger().error(f"record {scan_id} violates the contract: {errs}")
-                self.queue.mark_failed(list(bad), "contract violation")
+                self.queue.mark_rejected(list(bad), "contract violation")
                 batch = [r for r in batch if r["scan_id"] not in bad]
+                if not batch:
+                    return
         try:
             accepted = self.backend.upsert(batch)
         except BackendError as exc:
@@ -74,30 +76,34 @@ class UplinkNode(Node):
         self.synced += len(accepted)
         self.last_error = ""
 
-    def export(self, path: str = "", mission_id: str = "") -> tuple[Path, int]:
-        records = self.queue.records(mission_id or None)
-        if not path:
+    def export(self, filename: str = "", mission_id: str = "") -> tuple[Path, int]:
+        """Write a new CSV in export_dir. `filename` comes from the service: never a path."""
+        if not filename:
             stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = str(Path(self.p["export_dir"]) / f"scans_{mission_id or 'all'}_{stamp}.csv")
+            filename = f"scans_{safe_name_part(mission_id or 'all')}_{stamp}.csv"
+        path = resolve_export_path(self.p["export_dir"], filename)
+        records = self.queue.records(mission_id or None)
         return export_csv(records, path), len(records)
 
     def _on_export(self, request: ExportCsv.Request, response: ExportCsv.Response) -> ExportCsv.Response:
         try:
-            path, count = self.export(request.path, request.mission_id)
+            path, count = self.export(request.filename, request.mission_id)
             response.success, response.path, response.count = True, str(path), count
             response.message = f"exported {count} records"
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             response.success, response.message = False, str(exc)
         return response
 
     def _publish_diagnostics(self) -> None:
         total, pending = self.queue.counts()
+        rejected = self.queue.rejected_count()
         status = DiagnosticStatus(name="uplink", hardware_id=self.backend.name)
-        status.level = DiagnosticStatus.WARN if self.last_error else DiagnosticStatus.OK
-        status.message = self.last_error or f"{pending} pending"
+        status.level = DiagnosticStatus.WARN if self.last_error or rejected else DiagnosticStatus.OK
+        status.message = self.last_error or f"{pending} pending, {rejected} rejected"
         status.values = [
             KeyValue(key="queued_total", value=str(total)),
             KeyValue(key="pending", value=str(pending)),
+            KeyValue(key="rejected", value=str(rejected)),
             KeyValue(key="synced_this_run", value=str(self.synced)),
         ]
         msg = DiagnosticArray(status=[status])
@@ -105,10 +111,14 @@ class UplinkNode(Node):
         self.diag_pub.publish(msg)
 
     def shutdown(self) -> None:
-        if self.p["export_on_shutdown"]:
-            path, count = self.export()
-            self.get_logger().info(f"exported {count} records to {path}")
-        self.queue.close()
+        try:
+            if self.p["export_on_shutdown"]:
+                path, count = self.export()
+                self.get_logger().info(f"exported {count} records to {path}")
+        except (OSError, ValueError) as exc:
+            self.get_logger().error(f"export on shutdown failed: {exc}")
+        finally:
+            self.queue.close()
 
 
 def main(args=None) -> None:

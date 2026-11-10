@@ -1,6 +1,7 @@
 # Export queued scan records to CSV.
-# Empty path: write to the uplink node's default export directory.
-string path
+# Plain .csv file name, created in the uplink node's export directory. Paths and names that
+# already exist are refused. Empty: a name with the mission and a timestamp.
+string filename
 # Only export records from this mission. Empty: all missions.
 string mission_id
 ---

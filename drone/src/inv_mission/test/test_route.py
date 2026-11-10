@@ -20,6 +20,10 @@ def test_every_slot_is_scanned_once(layout):
     assert all(wp.hover_s == layout.scan.hover_s for wp in route if wp.kind == "scan")
 
 
+def test_every_waypoint_uses_the_layouts_speed(layout):
+    assert {wp.speed_mps for wp in generate_route(layout)} == {layout.scan.speed_mps}
+
+
 def test_route_starts_at_the_first_aisle_and_ends_home(layout):
     route = generate_route(layout)
     first, last = route[0], route[-1]

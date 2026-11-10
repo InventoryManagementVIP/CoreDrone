@@ -34,14 +34,26 @@ DEFAULTS: dict[str, object] = {
     "publish_rate_hz": 30.0,
     "min_rate_hz": 15.0,
     "lost_timeout_s": 0.5,
+    "max_future_s": 0.1,
     "status_rate_hz": 5.0,
     "backend_status_timeout_s": 2.0,
 }
 
 
-def classify(age_s: float, rate_hz: float, backend_state: int | None, lost_timeout_s: float, min_rate_hz: float) -> int:
+def classify(
+    age_s: float,
+    rate_hz: float,
+    backend_state: int | None,
+    lost_timeout_s: float,
+    min_rate_hz: float,
+    max_future_s: float = 0.1,
+) -> int:
     """Health state from sample age, input rate and what the backend says about itself."""
-    if backend_state == LocalizationStatus.STATE_LOST or not math.isfinite(age_s) or age_s > lost_timeout_s:
+    if (
+        backend_state == LocalizationStatus.STATE_LOST
+        or not math.isfinite(age_s)
+        or not -max_future_s <= age_s <= lost_timeout_s  # a sample from the future is as untrustworthy
+    ):
         return LocalizationStatus.STATE_LOST
     if backend_state == LocalizationStatus.STATE_DEGRADED or rate_hz < min_rate_hz:
         return LocalizationStatus.STATE_DEGRADED
@@ -141,7 +153,7 @@ class LocalizationAdapter(Node):
         now = self._now()
         if self._latest is None or self._latest_stamp_s == self._last_published_stamp_s:
             return
-        if self._age(now) > self.p["lost_timeout_s"]:
+        if not -self.p["max_future_s"] <= self._age(now) <= self.p["lost_timeout_s"]:
             return
         if self._backend_state_now(now) == LocalizationStatus.STATE_LOST:
             return
@@ -152,7 +164,14 @@ class LocalizationAdapter(Node):
     def _publish_status(self) -> None:
         now = self._now()
         age, rate = self._age(now), self._rate()
-        state = classify(age, rate, self._backend_state_now(now), self.p["lost_timeout_s"], self.p["min_rate_hz"])
+        state = classify(
+            age,
+            rate,
+            self._backend_state_now(now),
+            self.p["lost_timeout_s"],
+            self.p["min_rate_hz"],
+            self.p["max_future_s"],
+        )
         msg = LocalizationStatus()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.backend = self.p["backend"]

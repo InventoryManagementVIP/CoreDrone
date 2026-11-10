@@ -4,8 +4,9 @@
   mission:=scan   wait for ready -> take off -> visit every hover point of the generated route
                   (stop and hover at each) -> return home -> land
 Publishes /mission/status at a steady rate; inv_flight_interface treats it as a heartbeat.
-If the safety monitor requests an abort or the pilot takes over, the tree stops; the flight
-interface does the hold-and-land. TODO(phase-2): retries, rescans, corridor-blocked hold branch.
+If the safety monitor requests an abort, the pilot takes over or a step fails, the tree stops;
+the flight interface does the landing, which it starts itself when it sees a FAILED or ABORTED
+status in the air. TODO(phase-2): retries, rescans, corridor-blocked hold branch.
 """
 
 from __future__ import annotations
@@ -106,7 +107,7 @@ class MissionNode(Node):
             self.route = generate_route(layout, offset)
             steps = [bt.takeoff("takeoff", self.p["takeoff_altitude_m"])]
             for wp in self.route:
-                steps.append(bt.goto(f"goto {wp.name}", wp.pose.x, wp.pose.y, wp.pose.z, wp.pose.yaw))
+                steps.append(bt.goto(f"goto {wp.name}", wp.pose.x, wp.pose.y, wp.pose.z, wp.pose.yaw, wp.speed_mps))
                 if wp.kind == "scan" and wp.hover_s > 0:
                     steps.append(bt.hover(f"scan {wp.slot_code}", wp.hover_s))
             steps.append(bt.land("land"))

@@ -103,6 +103,7 @@ class ApDdsBackend(FlightBackend):
     def _on_status(self, msg: Status) -> None:
         with self._lock:
             self._touch()
+            self._state.last_status_s = self._state.last_message_s
             self._state.armed = bool(msg.armed)
             self._state.flying = bool(msg.flying)
             self._state.mode_id = int(msg.mode)
@@ -117,6 +118,7 @@ class ApDdsBackend(FlightBackend):
     def _on_battery(self, msg: BatteryState) -> None:
         with self._lock:
             self._touch()
+            self._state.last_battery_s = self._state.last_message_s
             self._state.battery_voltage = float(msg.voltage)
             self._state.battery_percentage = float(msg.percentage)
 
@@ -139,6 +141,8 @@ class ApDdsBackend(FlightBackend):
             s = self._state
             return FcState(
                 last_message_s=s.last_message_s,
+                last_status_s=s.last_status_s,
+                last_battery_s=s.last_battery_s,
                 armed=s.armed,
                 flying=s.flying,
                 mode_id=s.mode_id,

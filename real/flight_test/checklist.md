@@ -18,7 +18,7 @@ stack stops commanding the moment the mode changes (`pilot_override` in `/flight
 - [ ] `fc_bootstrap` log: DDS initialization passed, EKF origin set
 - [ ] `/localization/status` TRACKING; carry the drone by hand and check the pose moves correctly in Foxglove
 - [ ] GCS: `EKF3 ... is using external nav data`; no pre-arm errors
-- [ ] EKF source-set switch tested: set 2 (flow) takes over, back to set 1
+- [ ] Losing VSLAM on the bench (stop the camera, props off): the stack reports LOST and requests a landing. No flow sensor on the BOM, so there is no position fallback
 - [ ] Geofence box from the layout matches the area (`flight_interface` log)
 - [ ] Recording started (`just record PROFILE=minimal`)
 

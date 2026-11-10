@@ -10,6 +10,8 @@ flight_interface:
     base_frame: base_link
 
     link_timeout_s: 1.0                 # FC link considered lost after this long without messages
+    status_timeout_s: 2.0               # ... or without /ap/status (2 Hz at least), which carries armed/mode
+    battery_timeout_s: 3.0              # battery reads as unknown after this (/ap/battery is 1 Hz)
 
     # Speed and control limits (indoor, near shelves: keep these conservative)
     max_horizontal_speed_mps: 1.0
@@ -41,8 +43,11 @@ flight_interface:
     cmd_vel_hold_s: 2.0                 # ... and position hold after this
     mission_heartbeat_timeout_s: 0.0    # 0 disables; drone.launch.py enables it when a mission runs
     mission_lost_land_s: 30.0
+    safety_heartbeat_timeout_s: 0.0     # 0 disables; drone.launch.py enables it. Land if /safety/status stops
     abort_hold_s: 2.0
 
     # External navigation (odom->base_link) forwarding to the EKF
     external_nav_timeout_s: 0.5
     require_external_nav: true
+    pose_timeout_s: 0.5                 # TF map->base_link older than this is no pose at all
+    nav_lost_land_s: 3.0                # zero velocity at once; land if pose/external nav stay lost this long
